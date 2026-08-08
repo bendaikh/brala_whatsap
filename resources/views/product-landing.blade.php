@@ -348,7 +348,7 @@
                         </div>
                         @endif
 
-                        <form method="POST" action="{{ \App\Support\StoreDomain::submitLeadUrl($store, $product->slug) }}" class="space-y-6" dir="rtl">
+                        <form id="landing-order-form" method="POST" action="{{ \App\Support\StoreDomain::submitLeadUrl($store, $product->slug) }}" class="space-y-6" dir="rtl">
                             @csrf
                             <input type="hidden" name="language" value="ar">
                             
@@ -417,12 +417,12 @@
                                 </div>
                             @endforeach
 
-                            <button type="submit" 
-                                    class="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-black text-lg rounded-xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 flex items-center justify-center gap-3">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <button type="submit" id="landing-order-submit"
+                                    class="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-black text-lg rounded-xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:pointer-events-none">
+                                <svg class="w-6 h-6 submit-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                 </svg>
-                                <span>إرسال</span>
+                                <span class="submit-label">إرسال</span>
                             </button>
                         </form>
 
@@ -932,6 +932,34 @@
     </script>
     @endif
 
+
+    <script>
+        (function () {
+            const form = document.getElementById('landing-order-form');
+            if (!form) return;
+
+            let isSubmitting = false;
+
+            form.addEventListener('submit', function (event) {
+                if (isSubmitting) {
+                    event.preventDefault();
+                    return;
+                }
+
+                isSubmitting = true;
+
+                const btn = document.getElementById('landing-order-submit');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.setAttribute('aria-busy', 'true');
+                    const label = btn.querySelector('.submit-label');
+                    if (label) {
+                        label.textContent = 'جاري الإرسال...';
+                    }
+                }
+            });
+        })();
+    </script>
 
     <!-- Sticky Order Button - Full Width Bottom Bar -->
     <button onclick="document.getElementById('order-form').scrollIntoView({behavior: 'smooth', block: 'center'})" 

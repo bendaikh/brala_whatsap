@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductLead;
 use App\Models\Store;
 use App\Support\LandingFormFields;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ProductController extends Controller
 {
@@ -238,26 +240,74 @@ class ProductController extends Controller
             }
         }
 
-        $lead = \App\Models\ProductLead::create([
-            'product_id' => $product->id,
-            'selected_promotion_id' => $validated['selected_promotion_id'] ?? null,
-            'selected_variation_id' => $validated['selected_variation_id'] ?? null,
-            'selected_price' => $selectedPrice,
-            'user_id' => $product->user_id,
-            'name' => $validated['name'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'city' => $city,
-            'address' => $address,
-            'note' => $validated['note'] ?? null,
-            'custom_fields' => !empty($customFieldsData) ? $customFieldsData : null,
-            'language' => $validated['language'],
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'status' => 'pending',
-        ]);
+        $phone = $validated['phone'] ?? null;
+        $dedupeToken = md5(($phone ?: '') . '|' . ($request->ip() ?: '') . '|' . $product->id);
+        $lock = Cache::lock('lead-submit:' . $dedupeToken, 15);
+        $lockAcquired = $lock->get();
 
-        \App\Jobs\PushOrderToExternalApi::dispatch($lead);
+        if (!$lockAcquired) {
+            // Identical submit already in progress — wait briefly and reuse that order.
+            usleep(400000);
+            $existingLead = $this->findRecentDuplicateLead($product->id, $phone, $request->ip());
+            if ($existingLead) {
+                return $this->redirectAfterLead($existingLead);
+            }
 
+            // Last attempt to take the lock before creating.
+            $lockAcquired = $lock->get();
+        }
+
+        try {
+            $existingLead = $this->findRecentDuplicateLead($product->id, $phone, $request->ip());
+            if ($existingLead) {
+                return $this->redirectAfterLead($existingLead);
+            }
+
+            $lead = ProductLead::create([
+                'product_id' => $product->id,
+                'selected_promotion_id' => $validated['selected_promotion_id'] ?? null,
+                'selected_variation_id' => $validated['selected_variation_id'] ?? null,
+                'selected_price' => $selectedPrice,
+                'user_id' => $product->user_id,
+                'name' => $validated['name'] ?? null,
+                'phone' => $phone,
+                'city' => $city,
+                'address' => $address,
+                'note' => $validated['note'] ?? null,
+                'custom_fields' => !empty($customFieldsData) ? $customFieldsData : null,
+                'language' => $validated['language'],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'status' => 'pending',
+            ]);
+
+            \App\Jobs\PushOrderToExternalApi::dispatch($lead);
+
+            return $this->redirectAfterLead($lead);
+        } finally {
+            if ($lockAcquired) {
+                $lock->release();
+            }
+        }
+    }
+
+    private function findRecentDuplicateLead(int $productId, ?string $phone, ?string $ipAddress): ?ProductLead
+    {
+        $query = ProductLead::query()
+            ->where('product_id', $productId)
+            ->where('created_at', '>=', now()->subSeconds(60));
+
+        if ($phone) {
+            $query->where('phone', $phone);
+        } else {
+            $query->where('ip_address', $ipAddress);
+        }
+
+        return $query->latest('id')->first();
+    }
+
+    private function redirectAfterLead(ProductLead $lead)
+    {
         session([
             'completed_order_id' => $lead->id,
             'pending_conversion_tracking' => true,
