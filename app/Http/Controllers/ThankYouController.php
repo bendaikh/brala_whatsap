@@ -26,7 +26,7 @@ class ThankYouController extends Controller
         }
 
         $store = $lead->product->store;
-        $store->loadMissing('activeFacebookPixels');
+        $store->loadMissing(['activeFacebookPixels', 'workspace']);
 
         $resolvedStore = $request->attributes->get('resolved_store');
         if ($resolvedStore && $resolvedStore->id !== $store->id) {
@@ -34,8 +34,9 @@ class ThankYouController extends Controller
         }
 
         $trackConversion = (bool) session()->pull('pending_conversion_tracking', false);
+        $workspace = $store->workspace;
 
-        return view('thank-you', compact('store', 'lead', 'trackConversion'));
+        return view('thank-you', compact('store', 'lead', 'trackConversion', 'workspace'));
     }
 
     private function redirectWithoutOrder(Request $request)

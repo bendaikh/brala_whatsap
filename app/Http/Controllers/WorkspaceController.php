@@ -65,6 +65,8 @@ class WorkspaceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'language' => 'required|string|in:' . implode(',', array_keys(config('workspace.languages', ['ar' => []]))),
+            'currency' => 'required|string|in:' . implode(',', array_keys(config('workspace.currencies', ['MAD' => []]))),
             'is_active' => 'boolean',
         ]);
         
@@ -96,6 +98,8 @@ class WorkspaceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'language' => 'required|string|in:' . implode(',', array_keys(config('workspace.languages', ['ar' => []]))),
+            'currency' => 'required|string|in:' . implode(',', array_keys(config('workspace.currencies', ['MAD' => []]))),
             'is_active' => 'boolean',
         ]);
         

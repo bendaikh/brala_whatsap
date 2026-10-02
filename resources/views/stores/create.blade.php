@@ -66,6 +66,28 @@
                                 @enderror
                             </div>
 
+                            <div>
+                                <label for="service_integration_id" class="block text-sm font-medium text-gray-700">Affected Service Company</label>
+                                <select name="service_integration_id" id="service_integration_id"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500">
+                                    <option value="">No service assigned</option>
+                                    @foreach($serviceIntegrations as $integration)
+                                        <option value="{{ $integration->id }}" @selected((string) old('service_integration_id') === (string) $integration->id)>
+                                            {{ $integration->name }} ({{ $integration->type_label }}){{ $integration->is_enabled ? '' : ' — disabled' }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <p class="mt-1 text-sm text-gray-500">
+                                    Orders from this store will be pushed to the selected service.
+                                    @if($serviceIntegrations->isEmpty())
+                                        <a href="{{ route('stores.services-integration') }}" class="text-emerald-600 hover:underline">Add a service company</a> first.
+                                    @endif
+                                </p>
+                                @error('service_integration_id')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+
                             <div class="flex items-center">
                                 <input type="checkbox" name="is_active" id="is_active" value="1" {{ old('is_active', true) ? 'checked' : '' }}
                                     class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">

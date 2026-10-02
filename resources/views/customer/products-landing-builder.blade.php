@@ -44,6 +44,17 @@
             </div>
             
             <div class="flex items-center gap-3">
+                <div class="hidden sm:flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5 border border-white/10">
+                    <label class="text-xs text-gray-400 whitespace-nowrap">BG Color</label>
+                    <input type="color"
+                           x-model="backgroundColor"
+                           class="h-8 w-10 p-0 border-0 rounded cursor-pointer bg-transparent">
+                    <input type="text"
+                           x-model="backgroundColor"
+                           maxlength="7"
+                           class="w-24 px-2 py-1 rounded text-xs font-mono text-gray-900 bg-white border border-gray-300">
+                </div>
+
                 <div class="flex gap-2 bg-gray-800 rounded-lg p-1">
                     <button type="button" x-on:click="currentLang = 'fr'" 
                             x-bind:class="currentLang === 'fr' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'"
@@ -63,7 +74,7 @@
                 </div>
                 
                 @if($store)
-                <a href="{{ route('store.product.show', [$store->subdomain, $product->slug]) }}" target="_blank" 
+                <a href="{{ \App\Support\StoreDomain::productUrl($store, $product->slug) }}" target="_blank" 
                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -95,6 +106,34 @@
 
         <div class="container mx-auto px-4 py-8 space-y-8">
             
+            <div class="bg-[#0f1c2e] rounded-xl shadow-lg p-6 border border-white/10">
+                <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                    </svg>
+                    Page Theme — Background Color
+                </h2>
+                <div class="flex flex-wrap items-center gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Background Color</label>
+                        <div class="flex items-center gap-3">
+                            <input type="color"
+                                   x-model="backgroundColor"
+                                   class="h-12 w-16 px-1 border border-white/20 rounded-lg cursor-pointer bg-white">
+                            <input type="text"
+                                   x-model="backgroundColor"
+                                   maxlength="7"
+                                   pattern="^#[0-9A-Fa-f]{6}$"
+                                   class="w-32 px-3 py-2 border border-white/20 rounded-lg text-gray-900 font-mono text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="#1e3a8a">
+                            <div class="h-12 w-32 rounded-lg border border-white/20 shadow-inner"
+                                 x-bind:style="'background-color:' + backgroundColor"></div>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-400">AI picks this from the product when generating the landing page. You can change it anytime and click Save Changes.</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                 <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
                     <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,6 +312,7 @@ function landingPageBuilder() {
         currentLang: 'fr',
         saving: false,
         showSuccess: false,
+        backgroundColor: {!! json_encode($product->landing_page_background_color ?? '#1e3a8a') !!},
         showProductSections: {!! json_encode($product->landing_page_fr['show_product_sections'] ?? true) !!},
         sections: {!! $sectionsJson !!},
         pageData: {
@@ -446,7 +486,8 @@ function landingPageBuilder() {
                 body: JSON.stringify({
                     sections: this.sections,
                     page_data: this.pageData,
-                    show_product_sections: this.showProductSections
+                    show_product_sections: this.showProductSections,
+                    landing_page_background_color: this.backgroundColor
                 })
             })
             .then(function(response) { return response.json(); })

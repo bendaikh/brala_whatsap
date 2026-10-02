@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+@php
+    $workspace = $workspace ?? $store->workspace ?? null;
+    $currencySymbol = $workspace?->getCurrencySymbol() ?? 'DHS';
+    $currencyCode = $workspace?->getCurrencyCode() ?? 'MAD';
+@endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
 <head>
     <meta charset="utf-8">
@@ -17,7 +22,7 @@
                 'content_ids' => [(string) $product->id],
                 'content_type' => 'product',
                 'value' => (float) $product->price,
-                'currency' => 'MAD',
+                'currency' => $currencyCode,
             ],
         ]],
     ])
@@ -34,7 +39,7 @@
             content_id: '{{ $product->id }}',
             content_type: 'product',
             value: {{ $product->price }},
-            currency: 'درهم'
+            currency: '{{ $currencyCode }}'
           });
         }(window, document, 'ttq');
     </script>
@@ -90,9 +95,9 @@
                                         {{ $product->price_range }}
                                     </div>
                                 @else
-                                    <div class="text-5xl font-bold">{{ formatPriceDetail($product->price) }} درهم</div>
+                                    <div class="text-5xl font-bold">{{ formatPriceDetail($product->price) }} {{ $currencySymbol }}</div>
                                     @if($product->compare_at_price && $product->compare_at_price > $product->price)
-                                    <div class="text-lg line-through text-white/70">{{ formatPriceDetail($product->compare_at_price) }} درهم</div>
+                                    <div class="text-lg line-through text-white/70">{{ formatPriceDetail($product->compare_at_price) }} {{ $currencySymbol }}</div>
                                     @endif
                                 @endif
                             </div>
@@ -134,7 +139,7 @@
                                                     {{ $promotion->label ?? 'Buy' }} {{ $promotion->quantity_range }}
                                                 </div>
                                                 <div class="text-right">
-                                                    <div class="text-3xl font-bold text-white">{{ formatPriceDetail($promotion->price) }} <span class="text-base text-white/80">درهم</span></div>
+                                                    <div class="text-3xl font-bold text-white">{{ formatPriceDetail($promotion->price) }} <span class="text-base text-white/80">{{ $currencySymbol }}</span></div>
                                                     @if($promotion->discount_percentage > 0)
                                                     <div class="inline-block text-xs bg-yellow-400 text-purple-900 px-3 py-1 rounded-full font-bold mt-1">
                                                         -{{ $promotion->discount_percentage }}%
@@ -192,9 +197,9 @@
                                                     @endif
                                                 </div>
                                                 <div class="text-right">
-                                                    <div class="text-xl font-bold text-white">{{ formatPriceDetail($variation->price) }} درهم</div>
+                                                    <div class="text-xl font-bold text-white">{{ formatPriceDetail($variation->price) }} {{ $currencySymbol }}</div>
                                                     @if($variation->compare_at_price && $variation->compare_at_price > $variation->price)
-                                                    <div class="text-sm line-through text-white/70">{{ formatPriceDetail($variation->compare_at_price) }} درهم</div>
+                                                    <div class="text-sm line-through text-white/70">{{ formatPriceDetail($variation->compare_at_price) }} {{ $currencySymbol }}</div>
                                                     @endif
                                                 </div>
                                             </div>
@@ -314,9 +319,9 @@
                                     {{ $product->price_range }}
                                 </div>
                             @else
-                                <div class="text-4xl font-bold text-purple-600">{{ formatPriceDetail($product->price) }} درهم</div>
+                                <div class="text-4xl font-bold text-purple-600">{{ formatPriceDetail($product->price) }} {{ $currencySymbol }}</div>
                                 @if($product->compare_at_price && $product->compare_at_price > $product->price)
-                                <div class="text-lg line-through text-gray-500">{{ formatPriceDetail($product->compare_at_price) }} درهم</div>
+                                <div class="text-lg line-through text-gray-500">{{ formatPriceDetail($product->compare_at_price) }} {{ $currencySymbol }}</div>
                                 @endif
                             @endif
                         </div>
@@ -358,7 +363,7 @@
                                                 {{ $promotion->label ?? 'Buy' }} {{ $promotion->quantity_range }}
                                             </div>
                                             <div class="text-right">
-                                                <div class="text-3xl font-bold text-gray-800">{{ formatPriceDetail($promotion->price) }} <span class="text-base text-gray-600">درهم</span></div>
+                                                <div class="text-3xl font-bold text-gray-800">{{ formatPriceDetail($promotion->price) }} <span class="text-base text-gray-600">{{ $currencySymbol }}</span></div>
                                                 @if($promotion->discount_percentage > 0)
                                                 <div class="inline-block text-xs bg-yellow-500 text-white px-3 py-1 rounded-full font-bold mt-1">
                                                     -{{ $promotion->discount_percentage }}%
@@ -417,9 +422,9 @@
                                                 @endif
                                             </div>
                                             <div class="text-right">
-                                                <div class="text-xl font-bold text-purple-600">{{ formatPriceDetail($variation->price) }} درهم</div>
+                                                <div class="text-xl font-bold text-purple-600">{{ formatPriceDetail($variation->price) }} {{ $currencySymbol }}</div>
                                                 @if($variation->compare_at_price && $variation->compare_at_price > $variation->price)
-                                                <div class="text-sm line-through text-gray-500">{{ formatPriceDetail($variation->compare_at_price) }} درهم</div>
+                                                <div class="text-sm line-through text-gray-500">{{ formatPriceDetail($variation->compare_at_price) }} {{ $currencySymbol }}</div>
                                                 @endif
                                             </div>
                                         </div>
@@ -519,9 +524,9 @@
                         <div class="p-6">
                             <h3 class="font-bold text-xl mb-2 text-gray-900 group-hover:text-purple-600 transition">{{ $related->name }}</h3>
                             <div class="flex items-center gap-3">
-                                <span class="text-2xl font-bold text-purple-600">{{ formatPriceDetail($related->price) }} درهم</span>
+                                <span class="text-2xl font-bold text-purple-600">{{ formatPriceDetail($related->price) }} {{ $currencySymbol }}</span>
                                 @if($related->compare_at_price)
-                                <span class="text-sm line-through text-gray-500">{{ formatPriceDetail($related->compare_at_price) }} درهم</span>
+                                <span class="text-sm line-through text-gray-500">{{ formatPriceDetail($related->compare_at_price) }} {{ $currencySymbol }}</span>
                                 @endif
                             </div>
                         </div>
@@ -567,10 +572,10 @@
             // Update price display
             const priceContainer = document.getElementById('variationPrice');
             if (priceContainer) {
-                let priceHtml = `<div class="text-4xl font-bold text-purple-600">${formatPriceJs(price)} درهم</div>`;
+                let priceHtml = `<div class="text-4xl font-bold text-purple-600">${formatPriceJs(price)} {{ $currencySymbol }}</div>`;
                 
                 if (comparePrice > price) {
-                    priceHtml += `<div class="text-lg line-through text-gray-500">${formatPriceJs(comparePrice)} درهم</div>`;
+                    priceHtml += `<div class="text-lg line-through text-gray-500">${formatPriceJs(comparePrice)} {{ $currencySymbol }}</div>`;
                 }
                 
                 priceContainer.innerHTML = priceHtml;
@@ -602,10 +607,10 @@
             // Update price display in hero section
             const priceContainer = document.getElementById('variationPriceHero');
             if (priceContainer) {
-                let priceHtml = `<div class="text-5xl font-bold">${formatPriceHeroJs(price)} درهم</div>`;
+                let priceHtml = `<div class="text-5xl font-bold">${formatPriceHeroJs(price)} {{ $currencySymbol }}</div>`;
                 
                 if (comparePrice > price) {
-                    priceHtml += `<div class="text-lg line-through text-white/70">${formatPriceHeroJs(comparePrice)} درهم</div>`;
+                    priceHtml += `<div class="text-lg line-through text-white/70">${formatPriceHeroJs(comparePrice)} {{ $currencySymbol }}</div>`;
                 }
                 
                 priceContainer.innerHTML = priceHtml;

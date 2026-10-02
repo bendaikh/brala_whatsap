@@ -1,6 +1,10 @@
 @extends('layouts.customer')
 
 @section('content')
+    @php
+        $currencyCode = isset($activeWorkspace) ? $activeWorkspace->getCurrencyCode() : 'MAD';
+        $currencySymbol = isset($activeWorkspace) ? $activeWorkspace->getCurrencySymbol() : 'DHS';
+    @endphp
     <div class="mb-6">
         <div class="flex justify-between items-center">
             <div>
@@ -76,6 +80,7 @@
                     <!-- Description -->
                     <div>
                         <label for="description" class="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                        <p class="text-xs text-gray-500 mb-2">Use this for description content and images (not the main hero image — that is image 1 in Current Images).</p>
                         <!-- Quill Rich Text Editor -->
                         <div id="description-editor" class="bg-white rounded-lg" style="min-height: 200px;"></div>
                         <textarea 
@@ -91,7 +96,7 @@
                     <!-- Price and Compare Price -->
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label for="price" class="block text-sm font-medium text-gray-300 mb-2">Price (DHS) *</label>
+                            <label for="price" class="block text-sm font-medium text-gray-300 mb-2">Price ({{ $currencyCode }}) *</label>
                             <input 
                                 type="number" 
                                 id="price" 
@@ -109,7 +114,7 @@
                         </div>
 
                         <div>
-                            <label for="compare_at_price" class="block text-sm font-medium text-gray-300 mb-2">Compare at Price (DHS)</label>
+                            <label for="compare_at_price" class="block text-sm font-medium text-gray-300 mb-2">Compare at Price ({{ $currencyCode }})</label>
                             <input 
                                 type="number" 
                                 id="compare_at_price" 
@@ -178,6 +183,34 @@
                                 <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
                             @enderror
                         </div>
+                    </div>
+
+                    <!-- Google Sheet (optional) -->
+                    <div class="border-t border-white/10 pt-4">
+                        <label for="google_sheet_connection_id" class="block text-sm font-medium text-gray-300 mb-2">
+                            Google Sheet <span class="text-gray-500 font-normal">(optional)</span>
+                        </label>
+                        <select
+                            id="google_sheet_connection_id"
+                            name="google_sheet_connection_id"
+                            class="w-full px-4 py-3 bg-[#0a1628] border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        >
+                            <option value="">No Google Sheet</option>
+                            @foreach(($googleSheets ?? collect()) as $sheet)
+                                <option value="{{ $sheet->id }}" @selected((string) old('google_sheet_connection_id', $product->google_sheet_connection_id) === (string) $sheet->id)>
+                                    {{ $sheet->name }}{{ $sheet->is_enabled ? '' : ' (disabled)' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">
+                            If selected, every order for this product will be added to that sheet.
+                            @if(($googleSheets ?? collect())->isEmpty())
+                                Connect a sheet first in Manage Stores → Google Sheets.
+                            @endif
+                        </p>
+                        @error('google_sheet_connection_id')
+                            <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <!-- Product Variations Toggle -->
@@ -287,7 +320,7 @@
                                 
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-xs font-medium text-gray-300 mb-1">Price (DHS) *</label>
+                                        <label class="block text-xs font-medium text-gray-300 mb-1">Price ({{ $currencyCode }}) *</label>
                                         <input 
                                             type="number" 
                                             name="variations[{{ $loop->index }}][price]" 
@@ -377,12 +410,15 @@
             @if($product->images && count($product->images) > 0)
             <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6">
                 <h3 class="text-xl font-bold text-white mb-6">Current Images</h3>
-                <p class="text-sm text-gray-400 mb-4">Check the images you want to delete</p>
+                <p class="text-sm text-gray-400 mb-4">The <strong class="text-gray-300">first</strong> image is the main landing-page image. The rest are for the description. Check images you want to delete.</p>
                 
                 <div class="grid grid-cols-4 gap-4">
                     @foreach($product->images as $index => $image)
                     <div class="relative group">
                         <img src="/storage/{{ $image }}" alt="Product image" class="w-full h-32 object-cover rounded-lg border border-white/10" />
+                        <span class="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded {{ $index === 0 ? 'bg-emerald-600' : 'bg-black/60' }} text-white">
+                            {{ $index === 0 ? 'Main' : 'Desc ' . $index }}
+                        </span>
                         <label class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition rounded-lg flex items-center justify-center cursor-pointer">
                             <input type="checkbox" name="delete_images[]" value="{{ $image }}" class="w-5 h-5 text-red-500 rounded focus:ring-red-500">
                             <span class="text-white text-xs ml-2">Delete</span>
@@ -432,7 +468,7 @@
                                 <p class="font-semibold mb-1">How it works:</p>
                                 <ul class="list-disc list-inside space-y-1 text-xs">
                                     <li>Set different prices based on quantity purchased</li>
-                                    <li>Example: Buy 1 for 100 DHS, Buy 2 for 90 DHS each, Buy 3+ for 80 DHS each</li>
+                                    <li>Example: Buy 1 for 100 {{ $currencyCode }}, Buy 2 for 90 {{ $currencyCode }} each, Buy 3+ for 80 {{ $currencyCode }} each</li>
                                     <li>Promotions apply automatically at checkout</li>
                                 </ul>
                             </div>
@@ -479,7 +515,7 @@
                                 <p class="text-xs text-gray-400 mt-1">This will replace "Buy" or "اشتري" in your landing page</p>
                             </div>
                             
-                            <div class="grid grid-cols-3 gap-3 mb-3">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                                 <div>
                                     <label class="block text-xs font-medium text-gray-300 mb-1">Min Quantity *</label>
                                     <input 
@@ -505,7 +541,7 @@
                                 </div>
                                 
                                 <div>
-                                    <label class="block text-xs font-medium text-gray-300 mb-1">Price per Unit (DHS) *</label>
+                                    <label class="block text-xs font-medium text-gray-300 mb-1">Price per Unit ({{ $currencyCode }}) *</label>
                                     <input 
                                         type="number" 
                                         name="promotions[{{ $loop->index }}][price]" 
@@ -516,10 +552,23 @@
                                         class="w-full px-3 py-2 text-sm bg-[#0f1c2e] border border-white/10 rounded text-white"
                                     />
                                 </div>
+
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-300 mb-1">Compare at Price ({{ $currencyCode }})</label>
+                                    <input 
+                                        type="number" 
+                                        name="promotions[{{ $loop->index }}][compare_at_price]" 
+                                        value="{{ $promotion->compare_at_price }}"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="Optional strikethrough"
+                                        class="w-full px-3 py-2 text-sm bg-[#0f1c2e] border border-white/10 rounded text-white placeholder-gray-500"
+                                    />
+                                </div>
                             </div>
                             
                             <div class="bg-yellow-500/10 border border-yellow-500/20 rounded p-2 text-xs text-yellow-300">
-                                <strong>Current:</strong> Min: {{ $promotion->min_quantity }}, Max: {{ $promotion->max_quantity ?? 'unlimited' }}, Price: {{ number_format($promotion->price, 2) }} DHS
+                                <strong>Current:</strong> Min: {{ $promotion->min_quantity }}, Max: {{ $promotion->max_quantity ?? 'unlimited' }}, Price: {{ number_format($promotion->price, 2) }} {{ $currencyCode }}@if($promotion->compare_at_price), Compare: {{ number_format($promotion->compare_at_price, 2) }} {{ $currencyCode }}@endif
                             </div>
                         </div>
                         @endforeach
@@ -531,7 +580,7 @@
                         </svg>
                         <p class="text-yellow-300 font-semibold mb-1">⚠️ No pricing tiers added yet!</p>
                         <p class="text-gray-400 text-sm">Click <strong class="text-yellow-400">"Add Tier"</strong> above to create quantity-based pricing</p>
-                        <p class="text-xs mt-2 text-gray-500">Example: Buy 2+ items → Pay 90 DHS each instead of 100 DHS</p>
+                        <p class="text-xs mt-2 text-gray-500">Example: Buy 2+ items → Pay 90 {{ $currencyCode }} each instead of 100 {{ $currencyCode }}</p>
                     </div>
                     
                     <!-- Hidden field to ensure promotions data is always captured -->
@@ -545,6 +594,7 @@
                 
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-2">Upload Images</label>
+                    <p class="text-xs text-gray-500 mb-3">New images are appended after existing ones. The first image overall stays the main landing image; later ones are for the description (edit Description to insert them).</p>
                     <div class="border-2 border-dashed border-white/10 rounded-lg p-8 text-center hover:border-emerald-500/50 transition">
                         <input 
                             type="file" 
@@ -560,7 +610,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                             </svg>
                             <p class="text-gray-400 mb-1">Click to upload images</p>
-                            <p class="text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
+                            <p class="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
                         </label>
                     </div>
                     <div id="imagePreview" class="grid grid-cols-4 gap-4 mt-4"></div>
@@ -570,104 +620,16 @@
                 </div>
             </div>
 
-            <!-- Landing Page Sections (Image with Description) -->
-            <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h3 class="text-xl font-bold text-white">Landing Page Sections</h3>
-                        <p class="text-xs text-gray-500 mt-1">Add images with descriptions for your landing page (optional)</p>
-                    </div>
-                    <button 
-                        type="button" 
-                        onclick="addLandingSection()"
-                        class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold rounded-lg transition flex items-center gap-2 text-sm"
-                    >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                        </svg>
-                        Add Section
-                    </button>
-                </div>
-                
-                <div id="landingSectionsContainer" class="space-y-4">
-                    @if($product->landing_page_sections && count($product->landing_page_sections) > 0)
-                        @foreach($product->landing_page_sections as $index => $section)
-                        <div class="border border-white/10 rounded-lg p-4 bg-[#0a1628]" id="existing-section-{{ $index }}">
-                            <div class="flex items-center justify-between mb-4">
-                                <h4 class="text-sm font-semibold text-gray-300">Section {{ $index + 1 }}</h4>
-                                <button type="button" onclick="removeExistingSection({{ $index }})" 
-                                        class="text-red-400 hover:text-red-300 transition">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
-                                </button>
-                            </div>
-                            <div class="space-y-3">
-                                @if(!empty($section['image']))
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Current Image</label>
-                                    <img src="/storage/{{ $section['image'] }}" class="w-full h-32 object-cover rounded-lg border border-white/10" />
-                                </div>
-                                @endif
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Replace Image</label>
-                                    <input type="file" 
-                                           name="landing_sections[{{ $index }}][image]" 
-                                           accept="image/*"
-                                           class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-700 cursor-pointer">
-                                    <input type="hidden" name="landing_sections[{{ $index }}][existing_image]" value="{{ $section['image'] ?? '' }}">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Title (FR)</label>
-                                    <input type="text" 
-                                           name="landing_sections[{{ $index }}][title_fr]" 
-                                           value="{{ old('landing_sections.'.$index.'.title_fr', $section['title_fr'] ?? '') }}"
-                                           class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Description (FR)</label>
-                                    <textarea name="landing_sections[{{ $index }}][description_fr]" 
-                                              rows="2"
-                                              class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">{{ old('landing_sections.'.$index.'.description_fr', $section['description_fr'] ?? '') }}</textarea>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Title (EN)</label>
-                                    <input type="text" 
-                                           name="landing_sections[{{ $index }}][title_en]" 
-                                           value="{{ old('landing_sections.'.$index.'.title_en', $section['title_en'] ?? '') }}"
-                                           class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Description (EN)</label>
-                                    <textarea name="landing_sections[{{ $index }}][description_en]" 
-                                              rows="2"
-                                              class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">{{ old('landing_sections.'.$index.'.description_en', $section['description_en'] ?? '') }}</textarea>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Title (AR)</label>
-                                    <input type="text" 
-                                           name="landing_sections[{{ $index }}][title_ar]" 
-                                           value="{{ old('landing_sections.'.$index.'.title_ar', $section['title_ar'] ?? '') }}"
-                                           class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-400 mb-1">Description (AR)</label>
-                                    <textarea name="landing_sections[{{ $index }}][description_ar]" 
-                                              rows="2"
-                                              class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">{{ old('landing_sections.'.$index.'.description_ar', $section['description_ar'] ?? '') }}</textarea>
-                                </div>
-                            </div>
-                        </div>
-                        @endforeach
-                    @endif
-                </div>
-            </div>
-
             <!-- Settings Card -->
             <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6">
                 <h3 class="text-xl font-bold text-white mb-6">Settings</h3>
                 
                 <div class="space-y-4">
+                    @include('customer.partials.landing-background-color-picker', [
+                        'product' => $product,
+                        'hint' => 'Background color of the public product landing page. Change it here or regenerate with AI.',
+                    ])
+
                     <!-- Active Status -->
                     <div class="flex items-center justify-between">
                         <div>
@@ -706,7 +668,85 @@
                 </div>
             </div>
 
-            @include('customer.partials.landing-form-fields-builder', ['initialFields' => $product->form_fields ?? []])
+            <!-- Product Reviews / Testimonials -->
+            @php
+                $storedTestimonials = [];
+                foreach ([$product->landing_page_ar, $product->landing_page_fr, $product->landing_page_en] as $landing) {
+                    if (is_array($landing) && !empty($landing['testimonials']) && is_array($landing['testimonials'])) {
+                        $storedTestimonials = $landing['testimonials'];
+                        break;
+                    }
+                }
+                $oldTestimonials = old('testimonials');
+                $productTestimonials = [];
+                foreach ($storedTestimonials as $index => $testimonial) {
+                    $entry = is_array($testimonial) ? $testimonial : [];
+                    if (is_array($oldTestimonials) && isset($oldTestimonials[$index]['name'])) {
+                        $entry['name'] = $oldTestimonials[$index]['name'];
+                    }
+                    $productTestimonials[$index] = $entry;
+                }
+            @endphp
+            <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6">
+                <h3 class="text-xl font-bold text-white mb-2">Product Reviews</h3>
+                <p class="text-sm text-gray-400 mb-6">Reviews shown on this product’s landing page. You can change the reviewer name below.</p>
+
+                @if (empty($productTestimonials) || !is_array($productTestimonials))
+                    <div class="rounded-lg border border-white/10 bg-[#0a1628] px-4 py-8 text-center">
+                        <p class="text-gray-400">No reviews yet for this product.</p>
+                        <p class="text-xs text-gray-500 mt-2">Reviews appear after the AI landing page is generated.</p>
+                    </div>
+                @else
+                    <div class="space-y-4">
+                        @foreach ($productTestimonials as $index => $testimonial)
+                            @php
+                                $reviewName = is_array($testimonial) ? ($testimonial['name'] ?? '') : '';
+                                $reviewText = is_array($testimonial) ? ($testimonial['text'] ?? $testimonial['review'] ?? $testimonial['comment'] ?? '') : '';
+                                $reviewRating = is_array($testimonial) ? (int) ($testimonial['rating'] ?? 5) : 5;
+                            @endphp
+                            <div class="border border-white/10 rounded-lg p-4 bg-[#0a1628]">
+                                <div class="flex items-start justify-between gap-3 mb-3">
+                                    <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Review {{ $index + 1 }}</span>
+                                    <div class="flex gap-0.5" title="{{ $reviewRating }} stars">
+                                        @for ($s = 1; $s <= 5; $s++)
+                                            <svg class="w-4 h-4 {{ $s <= $reviewRating ? 'text-yellow-400' : 'text-gray-600' }}" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
+                                            </svg>
+                                        @endfor
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="testimonial_name_{{ $index }}" class="block text-xs font-medium text-gray-300 mb-1">Reviewer name</label>
+                                    <input
+                                        type="text"
+                                        id="testimonial_name_{{ $index }}"
+                                        name="testimonials[{{ $index }}][name]"
+                                        value="{{ $reviewName }}"
+                                        maxlength="255"
+                                        placeholder="Customer name"
+                                        class="w-full px-3 py-2 text-sm bg-[#0f1c2e] border border-white/10 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                    @error("testimonials.$index.name")
+                                        <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                @if ($reviewText !== '')
+                                    <p class="text-sm text-gray-400 italic leading-relaxed">{{ $reviewText }}</p>
+                                @else
+                                    <p class="text-sm text-gray-500">No review text.</p>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+
+            @include('customer.partials.landing-form-fields-builder', [
+                'initialFields' => $product->form_fields ?? [],
+                'workspaceLang' => $workspaceLang ?? ($store->workspace?->getLanguage() ?? 'ar'),
+            ])
 
             <!-- Submit Buttons -->
             <div class="flex justify-end gap-4">
@@ -724,7 +764,6 @@
     </div>
 
     <script>
-        let sectionCounter = {{ $product->landing_page_sections ? count($product->landing_page_sections) : 0 }};
         let variationCounter = {{ $product->variations ? $product->variations->count() : 0 }};
         let promotionCounter = {{ $product->promotions ? $product->promotions->count() : 0 }};
 
@@ -772,7 +811,7 @@
                     <p class="text-xs text-gray-400 mt-1">This will replace "Buy" or "اشتري" in your landing page</p>
                 </div>
                 
-                <div class="grid grid-cols-3 gap-3 mb-3">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-300 mb-1">Min Quantity *</label>
                         <input 
@@ -797,7 +836,7 @@
                     </div>
                     
                     <div>
-                        <label class="block text-xs font-medium text-gray-300 mb-1">Price per Unit (DHS) *</label>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Price per Unit ({{ $currencyCode }}) *</label>
                         <input
                             type="number"
                             name="promotions[${promotionId}][price]" 
@@ -808,10 +847,22 @@
                             class="w-full px-3 py-2 text-sm bg-[#0f1c2e] border border-white/10 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                         />
                     </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Compare at Price ({{ $currencyCode }})</label>
+                        <input
+                            type="number"
+                            name="promotions[${promotionId}][compare_at_price]"
+                            step="0.01"
+                            min="0"
+                            placeholder="Optional strikethrough"
+                            class="w-full px-3 py-2 text-sm bg-[#0f1c2e] border border-white/10 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                        />
+                    </div>
                 </div>
                 
                 <div class="bg-yellow-500/10 border border-yellow-500/20 rounded p-2 text-xs text-yellow-300">
-                    <strong>Example:</strong> Min: 2, Max: 4, Price: 90.00 → Customers buying 2-4 items pay 90 DHS per item
+                    <strong>Example:</strong> Min: 2, Max: 4, Price: 90.00, Compare: 120.00 → Shows 90 with 120 struck through
                 </div>
             `;
             
@@ -912,7 +963,7 @@
                     
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-medium text-gray-300 mb-1">Price (DHS) *</label>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Price ({{ $currencyCode }}) *</label>
                             <input 
                                 type="number" 
                                 name="variations[${variationId}][price]" 
@@ -1092,13 +1143,15 @@
                     const minQty = div.querySelector('input[name*="[min_quantity]"]');
                     const maxQty = div.querySelector('input[name*="[max_quantity]"]');
                     const price = div.querySelector('input[name*="[price]"]');
+                    const compareAt = div.querySelector('input[name*="[compare_at_price]"]');
                     const idField = div.querySelector('input[name*="[id]"]');
                     
                     if (minQty && price && minQty.value && price.value) {
                         const promo = {
                             min_quantity: minQty.value,
                             max_quantity: maxQty ? maxQty.value : null,
-                            price: price.value
+                            price: price.value,
+                            compare_at_price: compareAt && compareAt.value ? compareAt.value : null
                         };
                         if (idField && idField.value) {
                             promo.id = idField.value;
@@ -1161,110 +1214,6 @@
                     preview.appendChild(div);
                 }
                 
-                reader.readAsDataURL(file);
-            }
-        }
-
-        function addLandingSection() {
-            const container = document.getElementById('landingSectionsContainer');
-            const sectionId = sectionCounter++;
-            
-            const sectionDiv = document.createElement('div');
-            sectionDiv.className = 'border border-white/10 rounded-lg p-4 bg-[#0a1628]';
-            sectionDiv.id = `section-${sectionId}`;
-            sectionDiv.innerHTML = `
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-sm font-semibold text-gray-300">Section ${sectionId + 1}</h4>
-                    <button type="button" onclick="removeLandingSection(${sectionId})" 
-                            class="text-red-400 hover:text-red-300 transition">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Section Image</label>
-                        <input type="file" 
-                               name="landing_sections[${sectionId}][image]" 
-                               accept="image/*"
-                               onchange="previewSectionImage(event, ${sectionId})"
-                               class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-700 cursor-pointer">
-                        <div id="section-image-preview-${sectionId}" class="mt-2"></div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Title (FR)</label>
-                        <input type="text" 
-                               name="landing_sections[${sectionId}][title_fr]" 
-                               placeholder="e.g., Protection efficace"
-                               class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Description (FR)</label>
-                        <textarea name="landing_sections[${sectionId}][description_fr]" 
-                                  rows="2"
-                                  placeholder="Description en français..."
-                                  class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Title (EN)</label>
-                        <input type="text" 
-                               name="landing_sections[${sectionId}][title_en]" 
-                               placeholder="e.g., Effective protection"
-                               class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Description (EN)</label>
-                        <textarea name="landing_sections[${sectionId}][description_en]" 
-                                  rows="2"
-                                  placeholder="Description in English..."
-                                  class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Title (AR)</label>
-                        <input type="text" 
-                               name="landing_sections[${sectionId}][title_ar]" 
-                               placeholder="مثال: حماية فعّالة"
-                               class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Description (AR)</label>
-                        <textarea name="landing_sections[${sectionId}][description_ar]" 
-                                  rows="2"
-                                  placeholder="الوصف بالعربية..."
-                                  class="w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
-                    </div>
-                </div>
-            `;
-            
-            container.appendChild(sectionDiv);
-        }
-
-        function removeLandingSection(sectionId) {
-            const section = document.getElementById(`section-${sectionId}`);
-            if (section) {
-                section.remove();
-            }
-        }
-
-        function removeExistingSection(sectionId) {
-            const section = document.getElementById(`existing-section-${sectionId}`);
-            if (section && confirm('Are you sure you want to remove this section?')) {
-                section.remove();
-            }
-        }
-
-        function previewSectionImage(event, sectionId) {
-            const preview = document.getElementById(`section-image-preview-${sectionId}`);
-            const file = event.target.files[0];
-            
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.innerHTML = `
-                        <img src="${e.target.result}" class="w-full h-32 object-cover rounded-lg border border-white/10" />
-                    `;
-                }
                 reader.readAsDataURL(file);
             }
         }

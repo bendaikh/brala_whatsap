@@ -11,6 +11,10 @@
         </div>
     </x-slot>
 
+    @php
+        $currencySymbol = isset($activeWorkspace) ? $activeWorkspace->getCurrencySymbol() : (config('workspace.currencies.MAD.symbol') ?? 'DHS');
+    @endphp
+
     @if(session('success'))
     <div class="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-400">
         {{ session('success') }}
@@ -71,7 +75,7 @@
 
             <div class="bg-[#1a2d42] rounded-lg p-4 text-sm text-gray-400 space-y-2">
                 <div class="flex justify-between"><span>Produit:</span><span class="text-white">{{ $lead->product->name ?? 'N/A' }}</span></div>
-                <div class="flex justify-between"><span>Prix:</span><span class="text-green-400">{{ $lead->selected_price ? number_format($lead->selected_price, 2) . ' DHS' : 'N/A' }}</span></div>
+                <div class="flex justify-between"><span>Prix:</span><span class="text-green-400">{{ $lead->selected_price ? number_format($lead->selected_price, 2) . ' ' . $currencySymbol : 'N/A' }}</span></div>
                 @if($lead->promotion)
                 <div class="flex justify-between"><span>Quantité:</span><span class="text-yellow-400">{{ $lead->order_quantity }}</span></div>
                 @endif

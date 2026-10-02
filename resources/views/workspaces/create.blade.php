@@ -25,8 +25,8 @@
                                 <label for="name" class="block text-sm font-medium text-gray-700">Workspace Name *</label>
                                 <input type="text" name="name" id="name" value="{{ old('name') }}" required
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="e.g., Morocco, France, North America">
-                                <p class="mt-1 text-sm text-gray-500">Choose a name that represents your region or organization</p>
+                                    placeholder="e.g., Morocco, Côte d'Ivoire, France">
+                                <p class="mt-1 text-sm text-gray-500">Choose a name that represents your region or organization (e.g. Morocco, Côte d'Ivoire)</p>
                                 @error('name')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
@@ -40,6 +40,40 @@
                                 @error('description')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="language" class="block text-sm font-medium text-gray-700">Landing page language *</label>
+                                    <select name="language" id="language" required
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        @foreach(config('workspace.languages') as $code => $lang)
+                                            <option value="{{ $code }}" @selected(old('language', config('workspace.defaults.language')) === $code)>
+                                                {{ $lang['label'] }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-1 text-sm text-gray-500">Product landing pages and AI content will use this language (e.g. French for Côte d'Ivoire).</p>
+                                    @error('language')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label for="currency" class="block text-sm font-medium text-gray-700">Currency *</label>
+                                    <select name="currency" id="currency" required
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        @foreach(config('workspace.currencies') as $code => $curr)
+                                            <option value="{{ $code }}" @selected(old('currency', config('workspace.defaults.currency')) === $code)>
+                                                {{ $curr['label'] }} ({{ $curr['symbol'] }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-1 text-sm text-gray-500">Prices on landing pages will show this currency (e.g. FCFA for Côte d'Ivoire).</p>
+                                    @error('currency')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
                             </div>
 
                             <div class="flex items-center">

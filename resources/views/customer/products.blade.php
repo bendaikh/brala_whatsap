@@ -1,6 +1,9 @@
 @extends('layouts.customer')
 
 @section('content')
+    @php
+        $currencySymbol = isset($activeWorkspace) ? $activeWorkspace->getCurrencySymbol() : (config('workspace.currencies.MAD.symbol') ?? 'DHS');
+    @endphp
     <div class="mb-6">
         <div class="flex justify-between items-center">
             <div>
@@ -81,9 +84,9 @@
                                     <span class="text-sm text-gray-300">{{ $product->category->name ?? 'Uncategorized' }}</span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-white">{{ number_format($product->price, 2) }} DHS</div>
+                                    <div class="text-sm font-medium text-white">{{ number_format($product->price, 2) }} {{ $currencySymbol }}</div>
                                     @if($product->compare_at_price)
-                                        <div class="text-xs text-gray-400 line-through">{{ number_format($product->compare_at_price, 2) }} DHS</div>
+                                        <div class="text-xs text-gray-400 line-through">{{ number_format($product->compare_at_price, 2) }} {{ $currencySymbol }}</div>
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
@@ -178,7 +181,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex items-center justify-end gap-2">
                                         @if($store)
-                                        <a href="{{ route('store.product.show', [$store->subdomain, $product->slug]) }}" target="_blank" class="text-blue-400 hover:text-blue-300 transition" title="View Product Page">
+                                        <a href="{{ \App\Support\StoreDomain::productUrl($store, $product->slug) }}" target="_blank" class="text-blue-400 hover:text-blue-300 transition" title="View Product Page">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>

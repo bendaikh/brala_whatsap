@@ -2,26 +2,67 @@
 
 namespace App\Services;
 
+use App\Models\Store;
 use App\Models\User;
+use App\Models\WorkspaceServiceIntegration;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ExternalApiService
 {
-    protected $user;
-    protected $apiUrl;
-    protected $apiKey;
+    protected ?string $apiUrl = null;
+    protected ?string $apiKey = null;
+    protected bool $enabled = false;
+    protected ?string $sourceLabel = null;
+    protected ?int $userId = null;
+    protected ?int $integrationId = null;
 
-    public function __construct(User $user)
+    public function __construct(?User $user = null)
     {
-        $this->user = $user;
-        
+        if ($user) {
+            $this->configureFromUser($user);
+        }
+    }
+
+    /**
+     * Prefer the store's assigned service company; fall back to user-level System Connect.
+     */
+    public static function forStore(?Store $store, ?User $user = null): self
+    {
+        $service = new self();
+
+        $integration = $store?->serviceIntegration;
+        if ($integration && $integration->is_enabled && $integration->api_url && $integration->hasApiKey()) {
+            $service->configureFromIntegration($integration);
+            return $service;
+        }
+
+        $user = $user ?: $store?->user;
+        if ($user) {
+            $service->configureFromUser($user);
+        }
+
+        return $service;
+    }
+
+    public static function fromIntegration(WorkspaceServiceIntegration $integration): self
+    {
+        $service = new self();
+        $service->configureFromIntegration($integration);
+
+        return $service;
+    }
+
+    protected function configureFromUser(User $user): void
+    {
+        $this->userId = $user->id;
+        $this->sourceLabel = 'user:' . $user->id;
+        $this->enabled = (bool) $user->external_api_enabled;
+
         if ($user->external_api_enabled && $user->external_api_url && $user->external_api_key_encrypted) {
-            // Remove /api or /api/ from the end if present
-            $this->apiUrl = rtrim($user->external_api_url, '/');
-            $this->apiUrl = preg_replace('#/api/?$#i', '', $this->apiUrl);
-            
+            $this->apiUrl = $this->normalizeUrl($user->external_api_url);
+
             try {
                 $this->apiKey = Crypt::decryptString($user->external_api_key_encrypted);
             } catch (\Throwable $e) {
@@ -30,9 +71,29 @@ class ExternalApiService
         }
     }
 
+    protected function configureFromIntegration(WorkspaceServiceIntegration $integration): void
+    {
+        $this->integrationId = $integration->id;
+        $this->userId = $integration->user_id;
+        $this->sourceLabel = 'integration:' . $integration->id . ':' . $integration->name;
+        $this->enabled = (bool) $integration->is_enabled;
+
+        if ($integration->api_url && $integration->hasApiKey()) {
+            $this->apiUrl = $this->normalizeUrl($integration->api_url);
+            $this->apiKey = $integration->api_key;
+        }
+    }
+
+    protected function normalizeUrl(string $url): string
+    {
+        $url = rtrim($url, '/');
+
+        return preg_replace('#/api/?$#i', '', $url);
+    }
+
     public function isEnabled(): bool
     {
-        return $this->user->external_api_enabled && !empty($this->apiUrl) && !empty($this->apiKey);
+        return $this->enabled && !empty($this->apiUrl) && !empty($this->apiKey);
     }
 
     public function createOrder(array $orderData): array
@@ -49,12 +110,14 @@ class ExternalApiService
         try {
             Log::info('Attempting to create order in external API', [
                 'url' => $url,
-                'user_id' => $this->user->id,
+                'source' => $this->sourceLabel,
+                'user_id' => $this->userId,
+                'integration_id' => $this->integrationId,
                 'order_data' => $orderData
             ]);
 
             $jsonBody = json_encode($orderData);
-            
+
             Log::info('Raw JSON body being sent', [
                 'json_body' => $jsonBody,
                 'json_valid' => json_last_error() === JSON_ERROR_NONE
@@ -70,7 +133,9 @@ class ExternalApiService
 
             if ($response->successful()) {
                 Log::info('Order pushed to external API successfully', [
-                    'user_id' => $this->user->id,
+                    'source' => $this->sourceLabel,
+                    'user_id' => $this->userId,
+                    'integration_id' => $this->integrationId,
                     'url' => $url,
                     'response' => $response->json()
                 ]);
@@ -83,7 +148,9 @@ class ExternalApiService
             }
 
             Log::warning('Failed to push order to external API', [
-                'user_id' => $this->user->id,
+                'source' => $this->sourceLabel,
+                'user_id' => $this->userId,
+                'integration_id' => $this->integrationId,
                 'url' => $url,
                 'status' => $response->status(),
                 'response' => $response->body()
@@ -97,7 +164,9 @@ class ExternalApiService
 
         } catch (\Throwable $e) {
             Log::error('Exception while pushing order to external API', [
-                'user_id' => $this->user->id,
+                'source' => $this->sourceLabel,
+                'user_id' => $this->userId,
+                'integration_id' => $this->integrationId,
                 'url' => $url,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()

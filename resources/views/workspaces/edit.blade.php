@@ -41,6 +41,40 @@
                                 @enderror
                             </div>
 
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="language" class="block text-sm font-medium text-gray-700">Landing page language *</label>
+                                    <select name="language" id="language" required
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        @foreach(config('workspace.languages') as $code => $lang)
+                                            <option value="{{ $code }}" @selected(old('language', $workspace->language) === $code)>
+                                                {{ $lang['label'] }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-1 text-sm text-gray-500">Product landing pages and AI content will use this language.</p>
+                                    @error('language')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label for="currency" class="block text-sm font-medium text-gray-700">Currency *</label>
+                                    <select name="currency" id="currency" required
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        @foreach(config('workspace.currencies') as $code => $curr)
+                                            <option value="{{ $code }}" @selected(old('currency', $workspace->currency) === $code)>
+                                                {{ $curr['label'] }} ({{ $curr['symbol'] }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-1 text-sm text-gray-500">Prices on landing pages will show this currency.</p>
+                                    @error('currency')
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                            </div>
+
                             <div class="flex items-center">
                                 <input type="checkbox" name="is_active" id="is_active" value="1" {{ old('is_active', $workspace->is_active) ? 'checked' : '' }}
                                     class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">

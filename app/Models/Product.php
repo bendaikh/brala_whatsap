@@ -10,6 +10,7 @@ class Product extends Model
     protected $fillable = [
         'user_id',
         'store_id',
+        'google_sheet_connection_id',
         'theme',
         'theme_data',
         'category_id',
@@ -43,6 +44,7 @@ class Product extends Model
         'landing_page_ar',
         'landing_page_status',
         'landing_page_sections',
+        'landing_page_background_color',
         'form_fields'
     ];
 
@@ -84,6 +86,11 @@ class Product extends Model
     public function store()
     {
         return $this->belongsTo(Store::class);
+    }
+
+    public function googleSheetConnection()
+    {
+        return $this->belongsTo(GoogleSheetConnection::class);
     }
 
     public function category()
@@ -128,12 +135,13 @@ class Product extends Model
 
     public function getFirstImageAttribute()
     {
+        // Always prefer the first uploaded product image as the landing-page hero
         $candidates = [];
-        if ($this->main_image) {
-            $candidates[] = $this->main_image;
-        }
         if (! empty($this->images) && isset($this->images[0])) {
             $candidates[] = $this->images[0];
+        }
+        if ($this->main_image) {
+            $candidates[] = $this->main_image;
         }
         if (! empty($this->ai_generated_images) && isset($this->ai_generated_images[0])) {
             $candidates[] = $this->ai_generated_images[0];
@@ -147,6 +155,62 @@ class Product extends Model
         }
 
         return self::placeholderImageUri();
+    }
+
+    /**
+     * Remove <img> tags from HTML that duplicate the main/hero product image
+     * (same URL or identical file content from a re-upload).
+     */
+    public function stripDuplicateMainImagesFromHtml(?string $html): string
+    {
+        if ($html === null || $html === '') {
+            return '';
+        }
+
+        $heroUrl = $this->first_image;
+        if ($heroUrl === null || $heroUrl === '' || str_starts_with($heroUrl, 'data:')) {
+            return $html;
+        }
+
+        $heroPath = parse_url($heroUrl, PHP_URL_PATH) ?: $heroUrl;
+        $heroBasename = basename($heroPath);
+        $heroHash = null;
+
+        $heroRelative = ltrim(str_replace('/storage/', '', $heroPath), '/');
+        $heroFullPath = storage_path('app/public/' . $heroRelative);
+        if (is_file($heroFullPath)) {
+            $heroHash = md5_file($heroFullPath);
+        }
+
+        $cleaned = preg_replace_callback('/<img\b[^>]*>/i', function (array $match) use ($heroPath, $heroBasename, $heroHash) {
+            if (! preg_match('/\bsrc\s*=\s*(["\'])([^"\']+)\1/i', $match[0], $srcMatch)
+                && ! preg_match('/\bsrc\s*=\s*([^\s>]+)/i', $match[0], $srcMatch)) {
+                return $match[0];
+            }
+
+            $src = html_entity_decode($srcMatch[count($srcMatch) - 1], ENT_QUOTES);
+            $srcPath = parse_url($src, PHP_URL_PATH) ?: $src;
+            $srcBasename = basename($srcPath);
+
+            if ($srcPath === $heroPath || $srcBasename === $heroBasename) {
+                return '';
+            }
+
+            if ($heroHash) {
+                $srcRelative = ltrim(preg_replace('#^/?storage/#', '', $srcPath), '/');
+                $srcFullPath = storage_path('app/public/' . $srcRelative);
+                if (is_file($srcFullPath) && md5_file($srcFullPath) === $heroHash) {
+                    return '';
+                }
+            }
+
+            return $match[0];
+        }, $html) ?? $html;
+
+        // Drop empty paragraphs left behind after removing the duplicate image
+        $cleaned = preg_replace('/<p[^>]*>\s*(?:<br\s*\/?>)?\s*<\/p>/i', '', $cleaned) ?? $cleaned;
+
+        return $cleaned;
     }
 
     /**
@@ -238,12 +302,14 @@ class Product extends Model
 
         $minPrice = $variations->min('price');
         $maxPrice = $variations->max('price');
+        $currencySymbol = $this->store?->workspace?->getCurrencySymbol()
+            ?? config('workspace.currencies.MAD.symbol', 'DHS');
 
         if ($minPrice == $maxPrice) {
-            return number_format($minPrice, 2) . ' DHS';
+            return number_format($minPrice, 2) . ' ' . $currencySymbol;
         }
 
-        return number_format($minPrice, 2) . ' - ' . number_format($maxPrice, 2) . ' DHS';
+        return number_format($minPrice, 2) . ' - ' . number_format($maxPrice, 2) . ' ' . $currencySymbol;
     }
 
     public function getTotalStockAttribute()

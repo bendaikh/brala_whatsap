@@ -1,12 +1,42 @@
 <!DOCTYPE html>
-<html lang="ar" class="scroll-smooth" x-data="{ currentLang: 'ar' }">
+@php
+    $workspace = $workspace ?? $store->workspace ?? null;
+    $lpLang = $workspace?->getLanguage() ?? 'ar';
+    $lpCurrencyCode = $workspace?->getCurrencyCode() ?? 'MAD';
+    $lpCurrencySymbol = $workspace?->getCurrencySymbol() ?? 'DHS';
+    $lpIsRtl = $workspace?->isRtl() ?? ($lpLang === 'ar');
+    $lpHtmlLang = $workspace?->getHtmlLang() ?? 'ar';
+    $isMoroccoMarket = $workspace?->usesDarija() ?? ($lpCurrencyCode === 'MAD');
+
+    $lpBg = $product->landing_page_background_color ?: '#1e3a8a';
+    if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $lpBg)) {
+        $lpBg = '#1e3a8a';
+    }
+    $lpBg = strtolower($lpBg);
+
+    $lpAdjust = function (string $hex, float $percent): string {
+        $hex = ltrim($hex, '#');
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+        $r = (int) max(0, min(255, round($r + (255 * $percent / 100))));
+        $g = (int) max(0, min(255, round($g + (255 * $percent / 100))));
+        $b = (int) max(0, min(255, round($b + (255 * $percent / 100))));
+        return sprintf('#%02x%02x%02x', $r, $g, $b);
+    };
+
+    $lpBgDark = $lpAdjust($lpBg, -12);
+    $lpBgMid = $lpAdjust($lpBg, 8);
+    $lpBgLight = $lpAdjust($lpBg, 18);
+@endphp
+<html lang="{{ $lpHtmlLang }}" class="scroll-smooth" x-data="{ currentLang: '{{ $lpLang }}' }" style="background-color:{{ $lpBg }};">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $product->name }}</title>
     <meta name="description" content="{{ Str::limit(strip_tags($product->description), 160) }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
     @include('partials.facebook-pixels', [
@@ -18,7 +48,7 @@
                 'content_ids' => [(string) $product->id],
                 'content_type' => 'product',
                 'value' => (float) $product->price,
-                'currency' => 'MAD',
+                'currency' => $lpCurrencyCode,
             ],
         ]],
     ])
@@ -35,7 +65,7 @@
             content_id: '{{ $product->id }}',
             content_type: 'product',
             value: {{ $product->price }},
-            currency: 'درهم'
+            currency: '{{ $lpCurrencyCode }}'
           });
         }(window, document, 'ttq');
     </script>
@@ -43,16 +73,150 @@
     @endif
     
     <style>
+        :root {
+            --lp-bg: {{ $lpBg }};
+            --lp-bg-dark: {{ $lpBgDark }};
+            --lp-bg-mid: {{ $lpBgMid }};
+            --lp-bg-light: {{ $lpBgLight }};
+        }
         [x-cloak] { display: none !important; }
-        body { font-family: 'Inter', sans-serif; }
-        .rtl { direction: rtl; font-family: 'Cairo', sans-serif; }
-        .section-divider {
-            height: 40px;
-            background: linear-gradient(180deg, #1e40af 0%, #3b82f6 100%);
+        body {
+            font-family: 'Inter', sans-serif;
+            padding-bottom: 5.5rem;
+            background-color: var(--lp-bg);
+        }
+        .rtl { direction: rtl; font-family: 'Cairo', 'Tajawal', sans-serif; }
+        .landing-hero {
+            position: relative;
+            overflow-x: hidden;
+            overflow-y: visible;
+            padding: 0.75rem 0 2.5rem;
+            background:
+                radial-gradient(ellipse 70% 50% at 85% 15%, rgba(250, 204, 21, 0.18), transparent 55%),
+                radial-gradient(ellipse 60% 45% at 10% 90%, rgba(255, 255, 255, 0.12), transparent 50%),
+                linear-gradient(145deg, var(--lp-bg-dark) 0%, var(--lp-bg) 48%, var(--lp-bg-light) 100%);
+        }
+        .landing-band {
+            background: linear-gradient(90deg, var(--lp-bg-dark), var(--lp-bg-mid));
+        }
+        .landing-order-band {
+            background: linear-gradient(145deg, var(--lp-bg-dark) 0%, var(--lp-bg) 50%, var(--lp-bg-mid) 100%);
+        }
+        @media (min-width: 1024px) {
+            .landing-hero { padding: 1.25rem 0 3.5rem; }
+        }
+        .landing-hero__pattern {
+            position: absolute;
+            inset: 0;
+            opacity: 0.12;
+            pointer-events: none;
+            overflow: hidden;
+            background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');
+        }
+        .hero-grid {
+            display: grid;
+            gap: 2rem;
+            align-items: start;
+        }
+        .hero-grid--cta-only {
+            grid-template-columns: 1fr;
+            max-width: 48rem;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        @media (min-width: 1024px) {
+            .hero-grid:not(.hero-grid--cta-only) {
+                grid-template-columns: 1fr 1fr;
+                gap: 3.5rem;
+                column-gap: 3.5rem;
+            }
+        }
+        .hero-sticky-col {
+            align-self: start;
+        }
+        @media (min-width: 1024px) {
+            .hero-sticky-col {
+                position: sticky;
+                top: 1.5rem;
+                z-index: 20;
+            }
+        }
+        .hero-title {
+            font-family: 'Tajawal', 'Cairo', sans-serif;
+            letter-spacing: -0.01em;
+            line-height: 1.3;
+            text-wrap: balance;
+            color: #111827;
+            text-shadow: none;
+        }
+        .hero-title-accent {
+            display: block;
+            margin-top: 0.45rem;
+            font-size: 0.62em;
+            font-weight: 800;
+            letter-spacing: 0;
+            color: #92400e;
+            text-shadow: none;
+        }
+        .hero-title-underline {
+            width: 4.5rem;
+            height: 4px;
+            margin: 0.65rem auto 0;
+            border-radius: 999px;
+            background: linear-gradient(90deg, transparent, #92400e, transparent);
+        }
+        .hero-description {
+            margin: 0 auto;
+            max-width: 36rem;
+            color: #1f2937;
+            font-size: 1.05rem;
+            line-height: 1.75;
+            font-weight: 500;
+        }
+        .hero-image-fullbleed {
+            position: relative;
+            width: 100%;
+            margin-top: 0.75rem;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        .hero-image-fullbleed img {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: auto;
+            max-height: none;
+            display: block;
+            object-fit: contain;
+            object-position: center;
+        }
+        @media (min-width: 1024px) {
+            .hero-image-fullbleed {
+                margin-top: 1rem;
+                margin-bottom: 1.25rem;
+            }
+        }
+        .hero-fade-in {
+            animation: heroFadeUp 0.7s ease-out both;
+        }
+        .hero-fade-in-delay {
+            animation: heroFadeUp 0.85s ease-out 0.12s both;
+        }
+        @keyframes heroFadeUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .hero-fade-in,
+            .hero-fade-in-delay { animation: none; }
         }
     </style>
 </head>
-<body class="antialiased bg-white rtl">
+<body class="antialiased {{ $lpIsRtl ? 'rtl' : '' }}">
     @php
         // Helper function to format price - show decimals only when needed
         function formatPrice($price) {
@@ -76,9 +240,9 @@
                 ['name' => 'Hassan', 'text' => "Product matches the description. The team was very professional from start to finish. I will order again without hesitation. Thank you so much!", 'rating' => 5],
             ],
             'ar' => [
-                ['name' => 'أحمد', 'text' => "طلبت هذا المنتج وأنا معجب جداً بالجودة. خدمة العملاء كانت ممتازة والتوصيل سريع جداً. أنصح به بشدة!", 'rating' => 5],
-                ['name' => 'فاطمة', 'text' => "بالضبط ما كنت أبحث عنه! القيمة مقابل المال لا تُضاهى. صديقاتي سألنني من أين اشتريته. راضية جداً عن مشترياتي!", 'rating' => 5],
-                ['name' => 'حسن', 'text' => "المنتج مطابق للوصف. الفريق كان محترفاً جداً من البداية إلى النهاية. سأطلب مرة أخرى دون تردد. شكراً جزيلاً!", 'rating' => 5],
+                ['name' => 'أحمد', 'text' => "والله المنتج زوين بزاف، الجودة عالية والتوصيل كان سريع. كنصح بيه أي واحد!", 'rating' => 5],
+                ['name' => 'فاطمة', 'text' => "صراحة عجبني بزاف، الثمن مناسب والخدمة ممتازة. غادي نعاود نشري من عندهم.", 'rating' => 5],
+                ['name' => 'يوسف', 'text' => "وصلني فالوقت والجودة أحسن مما توقعت. شكرا بزاف على الخدمة!", 'rating' => 5],
             ],
         ];
 
@@ -163,302 +327,73 @@
 
 
     <!-- Hero Section -->
-    <section class="relative bg-gradient-to-br from-blue-700 via-blue-600 to-blue-800 py-16 lg:py-24">
-        <div class="absolute inset-0 opacity-10 overflow-hidden pointer-events-none">
-            <div class="absolute inset-0" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+    <section class="landing-hero">
+        <div class="landing-hero__pattern"></div>
+
+        @php
+            $heroName = trim($product->name ?? '');
+            $heroParts = preg_split('/\s*[–—\-]\s*/u', $heroName, 2);
+            $heroMain = trim($heroParts[0] ?? $heroName);
+            $heroAccent = trim($heroParts[1] ?? '');
+            $heroDescription = $product->landing_page_hero_description
+                ?? ($product->{'landing_page_' . $lpLang}['hero_description'] ?? null)
+                ?? ($product->landing_page_ar['hero_description'] ?? null)
+                ?? ($product->landing_page_fr['hero_description'] ?? null)
+                ?? ($product->landing_page_en['hero_description'] ?? null);
+        @endphp
+
+        <!-- Title -->
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="text-center hero-fade-in">
+                <h1 class="hero-title text-3xl sm:text-4xl lg:text-5xl font-black mb-0">
+                    {{ $heroMain }}
+                    @if($heroAccent !== '')
+                        <span class="hero-title-accent">{{ $heroAccent }}</span>
+                    @endif
+                </h1>
+                <div class="hero-title-underline" aria-hidden="true"></div>
+            </div>
         </div>
 
+        <!-- Product Image — full-bleed, before description -->
+        @if($product->first_image)
+        <div class="hero-image-fullbleed hero-fade-in-delay relative z-10">
+            <img src="{{ $product->first_image }}"
+                 alt="{{ $product->name }}"
+                 width="1254"
+                 height="1254"
+                 loading="eager"
+                 decoding="async">
+        </div>
+        @endif
+
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            <div class="grid lg:grid-cols-2 gap-12 items-start">
-                <!-- Left Side: Title + Image (STICKY - stays when scrolling) -->
-                <div class="lg:sticky lg:top-8 self-start space-y-8">
-                    <!-- Title Only -->
-                    <div class="text-white text-center">
-                        <h1 class="text-4xl lg:text-5xl xl:text-6xl font-black mb-6 leading-tight drop-shadow-lg">
-                            {{ $product->name }}
-                        </h1>
-                    </div>
+            @if($heroDescription)
+            <div class="text-center hero-fade-in mb-6">
+                <p class="hero-description">
+                    {{ $heroDescription }}
+                </p>
+            </div>
+            @endif
 
-                    <!-- Product Image -->
-                    @if($product->first_image)
-                    <div class="relative rounded-2xl overflow-hidden shadow-2xl">
-                        <img src="{{ $product->first_image }}" 
-                             alt="{{ $product->name }}" 
-                             class="w-full h-[400px] lg:h-[500px] object-cover">
-                    </div>
-                    @endif
-
-                </div>
-
-                <!-- Right Side: Price, Promotions, Variations & Contact Form (SCROLLS) -->
+            <div class="hero-grid hero-grid--cta-only">
+                <!-- Right Side: Order CTA & description -->
                 <div class="space-y-6">
-                    <!-- Price Display -->
-                    <div class="flex flex-wrap items-center justify-center gap-4" id="priceDisplayContainer">
-                        @if($product->has_variations && $product->activeVariations->isNotEmpty())
-                            <div class="bg-white/20 backdrop-blur-sm rounded-2xl px-6 py-3 border border-white/30">
-                                <div class="text-4xl font-black text-white" id="variationPriceForm">{{ $product->price_range }}</div>
-                            </div>
-                        @elseif($product->has_promotions && $product->activePromotions->isNotEmpty())
-                            @php $firstPromotion = $product->activePromotions->first(); @endphp
-                            <div class="bg-white/20 backdrop-blur-sm rounded-2xl px-6 py-3 border border-white/30">
-                                <div class="text-4xl font-black text-white" id="promotionPriceDisplay">{{ formatPrice($firstPromotion->price) }} <span class="text-xl">درهم</span></div>
-                                @if($product->compare_at_price && $product->compare_at_price > $firstPromotion->price)
-                                <div class="text-sm line-through text-white/70" id="promotionComparePriceDisplay">{{ formatPrice($product->compare_at_price) }} درهم</div>
-                                @endif
-                            </div>
-                            @if($firstPromotion->discount_percentage > 0)
-                            <div class="bg-yellow-400 text-blue-900 px-5 py-2 rounded-xl font-black text-xl shadow-lg" id="promotionDiscountDisplay">
-                                -{{ $firstPromotion->discount_percentage }}%
-                            </div>
-                            @endif
-                        @else
-                            <div class="bg-white/20 backdrop-blur-sm rounded-2xl px-6 py-3 border border-white/30">
-                                <div class="text-4xl font-black text-white">{{ formatPrice($product->price) }} <span class="text-xl">درهم</span></div>
-                                @if($product->compare_at_price && $product->compare_at_price > $product->price)
-                                <div class="text-sm line-through text-white/70">{{ formatPrice($product->compare_at_price) }} درهم</div>
-                                @endif
-                            </div>
-                            @if($product->discount_percentage)
-                            <div class="bg-yellow-400 text-blue-900 px-5 py-2 rounded-xl font-black text-xl shadow-lg">
-                                -{{ $product->discount_percentage }}%
-                            </div>
-                            @endif
-                        @endif
-                    </div>
-
-                    <!-- Quantity-Based Promotions -->
-                    @if($product->has_promotions && $product->activePromotions->isNotEmpty())
-                    <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20">
-                        <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                            <svg class="w-6 h-6 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <!-- Order Now CTA — scrolls to order form -->
+                    <div class="flex justify-center hero-fade-in">
+                        <button type="button"
+                                onclick="document.getElementById('order-form').scrollIntoView({behavior: 'smooth', block: 'start'})"
+                                class="w-full max-w-md py-4 px-8 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-black text-xl rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                             </svg>
-                            <span x-text="currentLang === 'ar' ? 'عروض الكمية' : (currentLang === 'en' ? 'Quantity Deals' : 'Offres de Quantité')">Offres de Quantité</span>
-                        </h3>
-                        <div class="space-y-2" id="promotionsContainerForm">
-                            @foreach($product->activePromotions as $index => $promotion)
-                            <label class="block p-4 bg-white/10 backdrop-blur-sm rounded-xl border-2 cursor-pointer hover:border-yellow-300 transition promotion-option-form {{ $index === 0 ? 'border-yellow-300' : 'border-white/20' }}"
-                                   data-promotion-id="{{ $promotion->id }}"
-                                   data-min-quantity="{{ $promotion->min_quantity }}"
-                                   data-max-quantity="{{ $promotion->max_quantity ?? '' }}"
-                                   data-price="{{ $promotion->price }}"
-                                   data-discount="{{ $promotion->discount_percentage }}">
-                                <div class="flex items-center gap-3">
-                                    <input type="radio" 
-                                           name="selected_promotion_form" 
-                                           value="{{ $promotion->id }}" 
-                                           class="w-5 h-5 text-yellow-400"
-                                           {{ $index === 0 ? 'checked' : '' }}
-                                           onchange="updatePromotionDisplayForm(this)">
-                                    <div class="flex-1 flex items-center justify-between">
-                                        <div class="font-semibold text-yellow-200">
-                                            @if($promotion->label)
-                                                {{ $promotion->label }}
-                                            @else
-                                                <span x-text="currentLang === 'ar' ? 'اشتري' : (currentLang === 'en' ? 'Buy' : 'Achetez')">Achetez</span>
-                                            @endif
-                                            {{ $promotion->quantity_range }}
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-2xl font-black text-white">{{ formatPrice($promotion->price) }} درهم</span>
-                                            @if($promotion->discount_percentage > 0)
-                                            <span class="text-xs bg-yellow-400 text-blue-900 px-2 py-1 rounded-full font-bold">
-                                                -{{ $promotion->discount_percentage }}%
-                                            </span>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </div>
-                            </label>
-                            @endforeach
-                        </div>
-                    </div>
-                    @endif
-
-                    <!-- Variations Selector -->
-                    @if($product->has_variations && $product->activeVariations->isNotEmpty())
-                    <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20">
-                        <h3 class="text-xl font-bold text-white mb-4" 
-                            x-text="currentLang === 'ar' ? 'الخيارات المتاحة' : (currentLang === 'en' ? 'Available Options' : 'Options disponibles')">
-                            Options disponibles
-                        </h3>
-                        
-                        <div class="space-y-2" id="variationsContainerForm">
-                            @foreach($product->activeVariations as $index => $variation)
-                            @php
-                                $displayName = '';
-                                if (!empty($variation->attributes) && is_array($variation->attributes)) {
-                                    $attrParts = [];
-                                    foreach ($variation->attributes as $key => $value) {
-                                        $attrParts[] = ucfirst($key) . ': ' . $value;
-                                    }
-                                    $displayName = implode(' / ', $attrParts);
-                                }
-                                if (empty($displayName)) {
-                                    $displayName = 'Option ' . ($index + 1);
-                                }
-                            @endphp
-                            <label class="block p-4 bg-white/10 backdrop-blur-sm rounded-xl border-2 cursor-pointer hover:border-white/50 transition variation-option-form {{ $variation->is_default ? 'border-white/50' : 'border-white/20' }}"
-                                   data-variation-id="{{ $variation->id }}"
-                                   data-price="{{ $variation->price }}"
-                                   data-compare-price="{{ $variation->compare_at_price ?? 0 }}"
-                                   data-discount="{{ $variation->discount_percentage }}">
-                                <div class="flex items-center gap-3">
-                                    <input type="radio" 
-                                           name="selected_variation_form" 
-                                           value="{{ $variation->id }}" 
-                                           class="w-5 h-5 text-blue-400"
-                                           {{ $variation->is_default ? 'checked' : '' }}
-                                           onchange="updateVariationDisplayForm(this)">
-                                    <div class="flex-1 flex items-center justify-between">
-                                        <div>
-                                            <div class="font-semibold text-white">{{ $displayName }}</div>
-                                            <div class="text-xs text-white/70">
-                                                <span x-text="currentLang === 'ar' ? 'المخزون: {{ $variation->stock }}' : 'Stock: {{ $variation->stock }}'">Stock: {{ $variation->stock }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-2xl font-black text-white">{{ formatPrice($variation->price) }} درهم</div>
-                                            @if($variation->compare_at_price && $variation->compare_at_price > $variation->price)
-                                            <div class="text-xs line-through text-white/70">{{ formatPrice($variation->compare_at_price) }} درهم</div>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </div>
-                            </label>
-                            @endforeach
-                        </div>
-                    </div>
-                    @endif
-
-                    <!-- Contact Form (White Box) -->
-                    <div id="order-form" class="bg-white rounded-2xl p-8 lg:p-10 shadow-2xl">
-                        <h2 class="text-2xl lg:text-3xl font-black mb-6 text-gray-900 text-center">
-                            للطلب المرجو ملئ الاستمارة أدناه
-                        </h2>
-
-                        @if ($errors->any())
-                        <div class="mb-6 rounded-xl border-2 border-red-500 bg-red-50 px-4 py-3 text-red-800">
-                            <p class="font-semibold mb-2 text-center">يرجى تصحيح الأخطاء التالية:</p>
-                            <ul class="list-disc list-inside text-sm text-right">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
-                        </div>
-                        @endif
-
-                        <form id="landing-order-form" method="POST" action="{{ \App\Support\StoreDomain::submitLeadUrl($store, $product->slug) }}" class="space-y-6" dir="rtl">
-                            @csrf
-                            <input type="hidden" name="language" value="ar">
-                            
-                            {{-- Hidden inputs for order details --}}
-                            @if($product->has_promotions && $product->activePromotions->isNotEmpty())
-                                @php $defaultPromotion = $product->activePromotions->first(); @endphp
-                                <input type="hidden" name="selected_promotion_id" id="selected_promotion_id" value="{{ $defaultPromotion->id }}">
-                                <input type="hidden" name="selected_price" id="selected_price" value="{{ $defaultPromotion->price }}">
-                            @elseif($product->has_variations && $product->activeVariations->isNotEmpty())
-                                @php $defaultVariation = $product->activeVariations->where('is_default', true)->first() ?? $product->activeVariations->first(); @endphp
-                                <input type="hidden" name="selected_variation_id" id="selected_variation_id" value="{{ $defaultVariation->id }}">
-                                <input type="hidden" name="selected_price" id="selected_price" value="{{ $defaultVariation->price }}">
-                            @else
-                                <input type="hidden" name="selected_price" id="selected_price" value="{{ $product->price }}">
-                            @endif
-
-                            @php
-                                // Get form fields or use defaults
-                                $formFields = $product->form_fields ?? [
-                                    ['id' => 'name', 'type' => 'text', 'label_ar' => 'الاسم', 'placeholder_ar' => 'الاسم', 'required' => true],
-                                    ['id' => 'phone', 'type' => 'tel', 'label_ar' => 'الهاتف', 'placeholder_ar' => 'الهاتف', 'required' => true],
-                                    ['id' => 'note', 'type' => 'textarea', 'label_ar' => 'ملاحظات', 'placeholder_ar' => 'ملاحظات', 'required' => false],
-                                ];
-                            @endphp
-
-                            @foreach($formFields as $field)
-                                <div>
-                                    <label class="block text-gray-900 font-bold mb-2 text-right">
-                                        {{ $field['label_ar'] ?? $field['label'] ?? 'حقل' }}
-                                        @if($field['required'] ?? false)
-                                            <span class="text-red-500">*</span>
-                                        @endif
-                                    </label>
-                                    
-                                    @if(($field['type'] ?? 'text') === 'textarea')
-                                        <textarea 
-                                            name="{{ $field['id'] }}" 
-                                            rows="3"
-                                            {{ ($field['required'] ?? false) ? 'required' : '' }}
-                                            placeholder="{{ $field['placeholder_ar'] ?? $field['placeholder'] ?? '' }}"
-                                            class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:outline-none transition-all resize-none text-right"></textarea>
-                                    @elseif(($field['type'] ?? 'text') === 'select')
-                                        <select 
-                                            name="{{ $field['id'] }}"
-                                            {{ ($field['required'] ?? false) ? 'required' : '' }}
-                                            class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl text-gray-900 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:outline-none transition-all text-right">
-                                            <option value="">{{ $field['placeholder_ar'] ?? 'اختر...' }}</option>
-                                            @if(!empty($field['options']))
-                                                @foreach($field['options'] as $option)
-                                                    <option value="{{ $option }}">{{ $option }}</option>
-                                                @endforeach
-                                            @endif
-                                        </select>
-                                    @else
-                                        <input 
-                                            type="{{ $field['type'] ?? 'text' }}" 
-                                            name="{{ $field['id'] }}" 
-                                            {{ ($field['required'] ?? false) ? 'required' : '' }}
-                                            placeholder="{{ $field['placeholder_ar'] ?? $field['placeholder'] ?? '' }}"
-                                            class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:outline-none transition-all text-right">
-                                    @endif
-                                    
-                                    @error($field['id'])
-                                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            @endforeach
-
-                            <button type="submit" id="landing-order-submit"
-                                    class="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-black text-lg rounded-xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:pointer-events-none">
-                                <svg class="w-6 h-6 submit-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                                </svg>
-                                <span class="submit-label">إرسال</span>
-                            </button>
-                        </form>
-
-                        <!-- Alternative Contact Methods -->
-                        @if(isset($settings) && ($settings->whatsapp_number || $settings->contact_phone))
-                        <div class="mt-8 pt-8 border-t-2 border-gray-200">
-                            <p class="text-gray-700 text-center mb-4 font-semibold">
-                                أو اتصل بنا مباشرة:
-                            </p>
-                            <div class="grid grid-cols-2 gap-4">
-                                @if($settings->whatsapp_number)
-                                <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $settings->whatsapp_number) }}?text={{ urlencode('مرحباً، أنا مهتم بـ ' . $product->name) }}" 
-                                   target="_blank" 
-                                   class="flex items-center justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
-                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                                    </svg>
-                                    <span class="text-sm">واتساب</span>
-                                </a>
-                                @endif
-                                
-                                @if($settings->contact_phone)
-                                <a href="tel:{{ preg_replace('/[^0-9+]/', '', $settings->contact_phone) }}" 
-                                   class="flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-                                    </svg>
-                                    <span class="text-sm">اتصل</span>
-                                </a>
-                                @endif
-                            </div>
-                        </div>
-                        @endif
+                            <span x-show="currentLang === 'fr'">Commander Maintenant</span>
+                            <span x-show="currentLang === 'en'">Order Now</span>
+                            <span x-show="currentLang === 'ar'">اطلب الآن</span>
+                        </button>
                     </div>
 
-                    <!-- Product Description Content (After Form, Same Column) -->
+                    <!-- Product Description Content (Same Column) -->
                     @php
                         $hasRealContentRight = function($html) {
                             if (empty($html)) return false;
@@ -467,25 +402,24 @@
                             $hasVideo = stripos($html, '<video') !== false || stripos($html, '<iframe') !== false;
                             return !empty($text) || $hasImage || $hasVideo;
                         };
-                        
-                        // Check product description field
-                        $productDesc = $product->description ?? '';
+
+                        // Hide description images that duplicate the hero/main image
+                        $productDesc = $product->stripDuplicateMainImagesFromHtml($product->description ?? '');
                         $hasProductDesc = $hasRealContentRight($productDesc);
-                        
-                        // Check landing page builder descriptions
-                        $descFrRight = $product->landing_page_fr['description'] ?? '';
-                        $descEnRight = $product->landing_page_en['description'] ?? '';
-                        $descArRight = $product->landing_page_ar['description'] ?? '';
-                        
+
+                        $descFrRight = $product->stripDuplicateMainImagesFromHtml($product->landing_page_fr['description'] ?? '');
+                        $descEnRight = $product->stripDuplicateMainImagesFromHtml($product->landing_page_en['description'] ?? '');
+                        $descArRight = $product->stripDuplicateMainImagesFromHtml($product->landing_page_ar['description'] ?? '');
+
                         $showFrRight = $hasRealContentRight($descFrRight);
                         $showEnRight = $hasRealContentRight($descEnRight);
                         $showArRight = $hasRealContentRight($descArRight);
-                        
+
                         $hasLandingDesc = $showFrRight || $showEnRight || $showArRight;
                         $hasAnyDescription = $hasProductDesc || $hasLandingDesc;
                     @endphp
                     @if($hasAnyDescription)
-                    <div class="mt-6 prose prose-lg max-w-none text-white leading-relaxed description-content-right" x-cloak>
+                    <div class="mt-6 max-w-none text-gray-900 leading-relaxed description-content-right product-desc-centered" x-cloak>
                         {{-- Show product description (from Edit Product page) --}}
                         @if($hasProductDesc)
                         <div class="mb-6">
@@ -520,15 +454,26 @@
         .description-content img,
         .description-content-right img {
             max-width: 100%;
+            width: 100%;
             height: auto;
-            border-radius: 0.75rem;
-            margin: 1.5rem auto;
+            border-radius: 0;
+            margin: 1rem 0;
             display: block;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+            box-shadow: none;
+        }
+        .description-content h1, .description-content h2, .description-content h3, .description-content h4, .description-content h5, .description-content h6,
+        .description-content-right h1, .description-content-right h2, .description-content-right h3, .description-content-right h4, .description-content-right h5, .description-content-right h6,
+        .description-content p, .description-content-right p,
+        .description-content li, .description-content-right li,
+        .description-content strong, .description-content-right strong,
+        .description-content b, .description-content-right b,
+        .description-content em, .description-content-right em,
+        .description-content span, .description-content-right span,
+        .description-content font, .description-content-right font {
+            color: #111827 !important;
         }
         .description-content h1, .description-content h2, .description-content h3,
         .description-content-right h1, .description-content-right h2, .description-content-right h3 {
-            color: #ffffff;
             font-weight: 700;
             margin-top: 1.25rem;
             margin-bottom: 0.75rem;
@@ -537,6 +482,39 @@
         .description-content h2, .description-content-right h2 { font-size: 1.5rem; }
         .description-content h3, .description-content-right h3 { font-size: 1.25rem; }
         .description-content p, .description-content-right p { margin: 0.75rem 0; line-height: 1.75; }
+
+        /* Center title + small description above product images */
+        .product-desc-centered,
+        .product-desc-centered *,
+        .description-content-right.product-desc-centered h1,
+        .description-content-right.product-desc-centered h2,
+        .description-content-right.product-desc-centered h3,
+        .description-content-right.product-desc-centered p {
+            text-align: center !important;
+        }
+        .description-content-right.product-desc-centered h1,
+        .description-content-right.product-desc-centered h2,
+        .description-content-right.product-desc-centered h3 {
+            margin-left: auto;
+            margin-right: auto;
+            max-width: 40rem;
+            font-weight: 800;
+        }
+        .description-content-right.product-desc-centered p {
+            margin-left: auto !important;
+            margin-right: auto !important;
+            max-width: 36rem;
+            color: #1f2937 !important;
+        }
+        .description-content-right.product-desc-centered p:has(img),
+        .description-content-right.product-desc-centered img {
+            max-width: none;
+            width: 100vw;
+            margin-left: calc(50% - 50vw) !important;
+            margin-right: calc(50% - 50vw) !important;
+            border-radius: 0;
+            display: block;
+        }
         
         /* Quill editor text alignment classes */
         .ql-align-center,
@@ -587,7 +565,7 @@
         .description-content ol, .description-content-right ol { list-style-type: decimal; }
         .description-content li, .description-content-right li { margin: 0.5rem 0; }
         .description-content a, .description-content-right a {
-            color: #60a5fa;
+            color: #1d4ed8 !important;
             text-decoration: underline;
         }
         .description-content blockquote, .description-content-right blockquote {
@@ -595,9 +573,9 @@
             padding-left: 1rem;
             margin: 1.25rem 0;
             font-style: italic;
-            color: #93c5fd;
+            color: #374151 !important;
         }
-        .description-content strong, .description-content-right strong { font-weight: 700; color: #ffffff; }
+        .description-content strong, .description-content-right strong { font-weight: 700; }
         .description-content em, .description-content-right em { font-style: italic; }
         .description-content iframe, .description-content video,
         .description-content-right iframe, .description-content-right video {
@@ -609,59 +587,302 @@
 
     {{-- Description Section removed from here - now displayed inside the contact form box above --}}
 
-    <!-- Section Divider -->
-    <div class="section-divider"></div>
-
-    <!-- Landing Page Sections (Image with Description) - BEFORE Features -->
-    @if($product->landing_page_sections && count($product->landing_page_sections) > 0 && ($product->landing_page_fr['show_product_sections'] ?? true))
-    <section class="py-16 lg:py-20 bg-white">
+    <!-- Order Form Section (before features) -->
+    <section class="py-16 lg:py-20 landing-order-band" id="order-section">
         <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="max-w-6xl mx-auto space-y-12">
-                @foreach($product->landing_page_sections as $index => $section)
-                <div class="grid md:grid-cols-2 gap-8 items-center {{ $index % 2 == 1 ? 'md:flex-row-reverse' : '' }}">
-                    <!-- Image -->
-                    <div class="relative {{ $index % 2 == 1 ? 'md:order-2' : '' }}">
-                        @if(!empty($section['image']))
-                        <div class="rounded-2xl overflow-hidden shadow-xl">
-                            <img src="/storage/{{ $section['image'] }}" 
-                                 alt="{{ $section['title_fr'] ?? 'Product feature' }}" 
-                                 class="w-full h-[350px] object-cover">
+            <div class="max-w-2xl mx-auto space-y-6">
+                <!-- Price Display (above form) -->
+                <div class="flex flex-wrap items-center justify-center gap-4" id="priceDisplayContainer">
+                    @if($product->has_variations && $product->activeVariations->isNotEmpty())
+                        <div class="bg-white rounded-2xl px-8 py-4 shadow-xl ring-1 ring-black/5">
+                            <div class="text-4xl font-black text-blue-900" id="variationPriceForm">{{ $product->price_range }}</div>
+                        </div>
+                    @elseif($product->has_promotions && $product->activePromotions->isNotEmpty())
+                        @php $firstPromotion = $product->activePromotions->first(); @endphp
+                        <div class="bg-white rounded-2xl px-8 py-4 shadow-xl ring-1 ring-black/5 text-center">
+                            <div class="text-4xl font-black text-blue-900" id="promotionPriceDisplay">{{ formatPrice($firstPromotion->price) }} <span class="text-xl">{{ $lpCurrencySymbol }}</span></div>
+                            @if($product->compare_at_price && $product->compare_at_price > $firstPromotion->price)
+                            <div class="text-sm line-through text-gray-400 mt-1" id="promotionComparePriceDisplay">{{ formatPrice($product->compare_at_price) }} {{ $lpCurrencySymbol }}</div>
+                            @endif
+                        </div>
+                        @if($firstPromotion->discount_percentage > 0)
+                        <div class="bg-gradient-to-l from-yellow-300 to-amber-400 text-blue-950 px-5 py-2 rounded-xl font-black text-xl shadow-lg shadow-yellow-500/30" id="promotionDiscountDisplay">
+                            -{{ $firstPromotion->discount_percentage }}%
                         </div>
                         @endif
-                    </div>
-                    
-                    <!-- Content -->
-                    <div class="{{ $index % 2 == 1 ? 'md:order-1' : '' }}" x-cloak>
-                        <h3 class="text-2xl lg:text-3xl font-black mb-4 text-gray-900">
-                            <span x-show="currentLang === 'fr'">{{ $section['title_fr'] ?? '' }}</span>
-                            <span x-show="currentLang === 'en'">{{ $section['title_en'] ?? $section['title_fr'] ?? '' }}</span>
-                            <span x-show="currentLang === 'ar'">{{ $section['title_ar'] ?? $section['title_fr'] ?? '' }}</span>
-                        </h3>
-                        <p class="text-gray-600 text-lg leading-relaxed">
-                            <span x-show="currentLang === 'fr'">{{ $section['description_fr'] ?? '' }}</span>
-                            <span x-show="currentLang === 'en'">{{ $section['description_en'] ?? $section['description_fr'] ?? '' }}</span>
-                            <span x-show="currentLang === 'ar'">{{ $section['description_ar'] ?? $section['description_fr'] ?? '' }}</span>
-                        </p>
+                    @else
+                        <div class="bg-white rounded-2xl px-8 py-4 shadow-xl ring-1 ring-black/5 text-center">
+                            <div class="text-4xl font-black text-blue-900">{{ formatPrice($product->price) }} <span class="text-xl font-bold">{{ $lpCurrencySymbol }}</span></div>
+                            @if($product->compare_at_price && $product->compare_at_price > $product->price)
+                            <div class="text-sm line-through text-gray-400 mt-1">{{ formatPrice($product->compare_at_price) }} {{ $lpCurrencySymbol }}</div>
+                            @endif
+                        </div>
+                        @if($product->discount_percentage)
+                        <div class="bg-gradient-to-l from-yellow-300 to-amber-400 text-blue-950 px-5 py-2 rounded-xl font-black text-xl shadow-lg shadow-yellow-500/30">
+                            -{{ $product->discount_percentage }}%
+                        </div>
+                        @endif
+                    @endif
+                </div>
+
+                <!-- Quantity-Based Promotions -->
+                @if($product->has_promotions && $product->activePromotions->isNotEmpty())
+                <div class="bg-white rounded-2xl p-5 shadow-xl ring-1 ring-black/5">
+                    <h3 class="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span x-text="currentLang === 'ar' ? 'عروض الكمية' : (currentLang === 'en' ? 'Quantity Deals' : 'Offres de Quantité')">Offres de Quantité</span>
+                    </h3>
+                    <div class="space-y-2" id="promotionsContainerForm">
+                        @foreach($product->activePromotions as $index => $promotion)
+                        <label class="block p-4 bg-gray-50 rounded-xl border-2 cursor-pointer hover:border-amber-400 transition promotion-option-form {{ $index === 0 ? 'border-amber-400 bg-amber-50' : 'border-gray-200' }}"
+                               data-promotion-id="{{ $promotion->id }}"
+                               data-min-quantity="{{ $promotion->min_quantity }}"
+                               data-max-quantity="{{ $promotion->max_quantity ?? '' }}"
+                               data-price="{{ $promotion->price }}"
+                               data-discount="{{ $promotion->discount_percentage }}">
+                            <div style="display:flex;align-items:center;gap:0.5rem;">
+                                <input type="radio"
+                                       name="selected_promotion_form"
+                                       value="{{ $promotion->id }}"
+                                       class="w-5 h-5 text-amber-500 accent-amber-500"
+                                       style="flex-shrink:0;"
+                                       {{ $index === 0 ? 'checked' : '' }}
+                                       onchange="updatePromotionDisplayForm(this)">
+                                <span style="display:inline-flex;align-items:center;justify-content:center;min-width:2rem;height:2rem;padding:0 0.45rem;border-radius:0.5rem;background:#1e3a8a;color:#fff;font-size:0.9rem;font-weight:900;flex-shrink:0;line-height:1;" title="الكمية">
+                                    x{{ $promotion->min_quantity }}
+                                </span>
+                                <div style="flex:1;min-width:0;font-weight:600;color:#1f2937;font-size:0.9rem;line-height:1.4;white-space:normal;word-break:break-word;">
+                                    @if($promotion->label)
+                                        {{ $promotion->label }}
+                                    @else
+                                        <span x-text="currentLang === 'ar' ? 'اشتري' : (currentLang === 'en' ? 'Buy' : 'Achetez')">Achetez</span>
+                                    @endif
+                                </div>
+                                <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;margin-inline-start:auto;">
+                                    <span style="font-size:1.1rem;font-weight:900;color:#1e3a8a;white-space:nowrap;">{{ formatPrice($promotion->price) }} <span style="font-size:0.8rem;font-weight:700;">{{ $lpCurrencySymbol }}</span></span>
+                                    @if($promotion->discount_percentage > 0)
+                                    <span class="text-xs bg-amber-400 text-blue-900 px-2 py-1 rounded-full font-bold">
+                                        -{{ $promotion->discount_percentage }}%
+                                    </span>
+                                    @endif
+                                </div>
+                            </div>
+                        </label>
+                        @endforeach
                     </div>
                 </div>
-                @if($index < count($product->landing_page_sections) - 1)
-                <div class="border-t border-gray-200"></div>
                 @endif
-                @endforeach
+
+                <!-- Variations Selector -->
+                @if($product->has_variations && $product->activeVariations->isNotEmpty())
+                <div class="bg-white rounded-2xl p-5 shadow-xl ring-1 ring-black/5">
+                    <h3 class="text-xl font-bold text-blue-900 mb-4"
+                        x-text="currentLang === 'ar' ? 'الخيارات المتاحة' : (currentLang === 'en' ? 'Available Options' : 'Options disponibles')">
+                        Options disponibles
+                    </h3>
+
+                    <div class="space-y-2" id="variationsContainerForm">
+                        @foreach($product->activeVariations as $index => $variation)
+                        @php
+                            $displayName = '';
+                            if (!empty($variation->attributes) && is_array($variation->attributes)) {
+                                $attrParts = [];
+                                foreach ($variation->attributes as $key => $value) {
+                                    $attrParts[] = ucfirst($key) . ': ' . $value;
+                                }
+                                $displayName = implode(' / ', $attrParts);
+                            }
+                            if (empty($displayName)) {
+                                $displayName = 'Option ' . ($index + 1);
+                            }
+                        @endphp
+                        <label class="block p-4 bg-gray-50 rounded-xl border-2 cursor-pointer hover:border-blue-400 transition variation-option-form {{ $variation->is_default ? 'border-blue-500 bg-blue-50' : 'border-gray-200' }}"
+                               data-variation-id="{{ $variation->id }}"
+                               data-price="{{ $variation->price }}"
+                               data-compare-price="{{ $variation->compare_at_price ?? 0 }}"
+                               data-discount="{{ $variation->discount_percentage }}">
+                            <div class="flex items-center gap-3">
+                                <input type="radio"
+                                       name="selected_variation_form"
+                                       value="{{ $variation->id }}"
+                                       class="w-5 h-5 text-blue-600 accent-blue-600"
+                                       {{ $variation->is_default ? 'checked' : '' }}
+                                       onchange="updateVariationDisplayForm(this)">
+                                <div class="flex-1 flex items-center justify-between gap-3">
+                                    <div>
+                                        <div class="font-semibold text-gray-900">{{ $displayName }}</div>
+                                        <div class="text-xs text-gray-500">
+                                            <span x-text="currentLang === 'ar' ? 'المخزون: {{ $variation->stock }}' : 'Stock: {{ $variation->stock }}'">Stock: {{ $variation->stock }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-left shrink-0">
+                                        <div class="text-2xl font-black text-blue-900">{{ formatPrice($variation->price) }} <span class="text-base font-bold">{{ $lpCurrencySymbol }}</span></div>
+                                        @if($variation->compare_at_price && $variation->compare_at_price > $variation->price)
+                                        <div class="text-xs line-through text-gray-400">{{ formatPrice($variation->compare_at_price) }} {{ $lpCurrencySymbol }}</div>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
+                <!-- Contact Form (White Box) -->
+                @php
+                    $formCopy = match ($lpLang) {
+                        'fr' => [
+                            'title' => 'Pour commander, veuillez remplir le formulaire ci-dessous',
+                            'subtitle' => 'Renseignez vos informations et nous vous contacterons rapidement',
+                            'errors' => 'Veuillez corriger les erreurs suivantes :',
+                            'submit' => 'Envoyer',
+                            'submitting' => 'Envoi en cours...',
+                            'choose' => 'Choisir...',
+                            'field' => 'Champ',
+                            'defaults' => [
+                                ['id' => 'name', 'type' => 'text', 'label' => 'Nom', 'placeholder' => 'Votre nom', 'required' => true],
+                                ['id' => 'phone', 'type' => 'tel', 'label' => 'Téléphone', 'placeholder' => 'Votre téléphone', 'required' => true],
+                                ['id' => 'note', 'type' => 'textarea', 'label' => 'Notes', 'placeholder' => 'Notes (optionnel)', 'required' => false],
+                            ],
+                        ],
+                        'en' => [
+                            'title' => 'To order, please fill out the form below',
+                            'subtitle' => 'Enter your details and we will contact you shortly',
+                            'errors' => 'Please correct the following errors:',
+                            'submit' => 'Submit',
+                            'submitting' => 'Submitting...',
+                            'choose' => 'Choose...',
+                            'field' => 'Field',
+                            'defaults' => [
+                                ['id' => 'name', 'type' => 'text', 'label' => 'Name', 'placeholder' => 'Your name', 'required' => true],
+                                ['id' => 'phone', 'type' => 'tel', 'label' => 'Phone', 'placeholder' => 'Your phone', 'required' => true],
+                                ['id' => 'note', 'type' => 'textarea', 'label' => 'Notes', 'placeholder' => 'Notes (optional)', 'required' => false],
+                            ],
+                        ],
+                        default => [
+                            'title' => 'للطلب المرجو ملئ الاستمارة أدناه',
+                            'subtitle' => 'عبّي المعلومات ديالك و غادي نتصلو بيك في أقرب وقت',
+                            'errors' => 'يرجى تصحيح الأخطاء التالية:',
+                            'submit' => 'إرسال',
+                            'submitting' => 'جاري الإرسال...',
+                            'choose' => 'اختر...',
+                            'field' => 'حقل',
+                            'defaults' => [
+                                ['id' => 'name', 'type' => 'text', 'label' => 'الاسم', 'placeholder' => 'الاسم', 'required' => true],
+                                ['id' => 'phone', 'type' => 'tel', 'label' => 'الهاتف', 'placeholder' => 'الهاتف', 'required' => true],
+                                ['id' => 'note', 'type' => 'textarea', 'label' => 'ملاحظات', 'placeholder' => 'ملاحظات', 'required' => false],
+                            ],
+                        ],
+                    };
+                    $formAlign = $lpIsRtl ? 'text-right' : 'text-left';
+                @endphp
+                <div id="order-form" class="bg-white rounded-2xl p-8 lg:p-10 shadow-2xl shadow-blue-950/30 ring-1 ring-black/5 scroll-mt-6">
+                    <h2 class="text-2xl lg:text-3xl font-black mb-2 text-gray-900 text-center" @if($lpIsRtl) style="font-family: 'Tajawal', 'Cairo', sans-serif;" @endif>
+                        {{ $formCopy['title'] }}
+                    </h2>
+                    <p class="text-center text-gray-500 mb-6 text-sm">{{ $formCopy['subtitle'] }}</p>
+
+                    @if ($errors->any())
+                    <div class="mb-6 rounded-xl border-2 border-red-500 bg-red-50 px-4 py-3 text-red-800">
+                        <p class="font-semibold mb-2 text-center">{{ $formCopy['errors'] }}</p>
+                        <ul class="list-disc list-inside text-sm {{ $formAlign }}">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    @endif
+
+                    <form id="landing-order-form" method="POST" action="{{ \App\Support\StoreDomain::submitLeadUrl($store, $product->slug) }}" class="space-y-6" @if($lpIsRtl) dir="rtl" @endif>
+                        @csrf
+                        <input type="hidden" name="language" value="{{ $lpLang }}">
+
+                        {{-- Hidden inputs for order details --}}
+                        @if($product->has_promotions && $product->activePromotions->isNotEmpty())
+                            @php $defaultPromotion = $product->activePromotions->first(); @endphp
+                            <input type="hidden" name="selected_promotion_id" id="selected_promotion_id" value="{{ $defaultPromotion->id }}">
+                            <input type="hidden" name="selected_price" id="selected_price" value="{{ $defaultPromotion->price }}">
+                        @elseif($product->has_variations && $product->activeVariations->isNotEmpty())
+                            @php $defaultVariation = $product->activeVariations->where('is_default', true)->first() ?? $product->activeVariations->first(); @endphp
+                            <input type="hidden" name="selected_variation_id" id="selected_variation_id" value="{{ $defaultVariation->id }}">
+                            <input type="hidden" name="selected_price" id="selected_price" value="{{ $defaultVariation->price }}">
+                        @else
+                            <input type="hidden" name="selected_price" id="selected_price" value="{{ $product->price }}">
+                        @endif
+
+                        @php
+                            $formFields = $product->form_fields ?? $formCopy['defaults'];
+                        @endphp
+
+                        @foreach($formFields as $field)
+                            @php
+                                $fieldLabel = \App\Support\LandingFormFields::resolveLabel($field, $lpLang, $formCopy['field']);
+                                $fieldPlaceholder = \App\Support\LandingFormFields::resolvePlaceholder($field, $lpLang);
+                            @endphp
+                            <div>
+                                <label class="block text-gray-900 font-bold mb-2 {{ $formAlign }}">
+                                    {{ $fieldLabel }}
+                                    @if($field['required'] ?? false)
+                                        <span class="text-red-500">*</span>
+                                    @endif
+                                </label>
+
+                                @if(($field['type'] ?? 'text') === 'textarea')
+                                    <textarea
+                                        name="{{ $field['id'] }}"
+                                        rows="3"
+                                        {{ ($field['required'] ?? false) ? 'required' : '' }}
+                                        placeholder="{{ $fieldPlaceholder }}"
+                                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:outline-none transition-all resize-none {{ $formAlign }}"></textarea>
+                                @elseif(($field['type'] ?? 'text') === 'select')
+                                    <select
+                                        name="{{ $field['id'] }}"
+                                        {{ ($field['required'] ?? false) ? 'required' : '' }}
+                                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl text-gray-900 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:outline-none transition-all {{ $formAlign }}">
+                                        <option value="">{{ $fieldPlaceholder ?: $formCopy['choose'] }}</option>
+                                        @if(!empty($field['options']))
+                                            @foreach($field['options'] as $option)
+                                                <option value="{{ $option }}">{{ $option }}</option>
+                                            @endforeach
+                                        @endif
+                                    </select>
+                                @else
+                                    <input
+                                        type="{{ $field['type'] ?? 'text' }}"
+                                        name="{{ $field['id'] }}"
+                                        {{ ($field['required'] ?? false) ? 'required' : '' }}
+                                        placeholder="{{ $fieldPlaceholder }}"
+                                        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:outline-none transition-all {{ $formAlign }}">
+                                @endif
+
+                                @error($field['id'])
+                                    <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        @endforeach
+
+                        <button type="submit" id="landing-order-submit"
+                                class="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-black text-lg rounded-xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:pointer-events-none">
+                            <svg class="w-6 h-6 submit-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            <span class="submit-label">{{ $formCopy['submit'] }}</span>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </section>
-    
-    <!-- Section Divider -->
-    <div class="section-divider"></div>
-    @endif
 
     <!-- Features Section -->
-    <section class="py-16 lg:py-20 bg-gray-50" x-cloak>
+    <section class="py-16 lg:py-20" x-cloak>
         <div class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-12">
                 <h2 class="text-3xl lg:text-4xl font-black text-gray-900 mb-4">
-                    <span x-show="currentLang === 'fr'">المميزات / Les Caractéristiques</span>
+                    <span x-show="currentLang === 'fr'">Les caractéristiques</span>
                     <span x-show="currentLang === 'en'">Features</span>
                     <span x-show="currentLang === 'ar'">المميزات</span>
                 </h2>
@@ -681,38 +902,8 @@
         </div>
     </section>
 
-    <!-- Steps Section (How It Works) -->
-    <section class="py-16 lg:py-20 bg-white" x-cloak>
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-12">
-                <h2 class="text-3xl lg:text-4xl font-black text-gray-900 mb-4" x-text="pageData[currentLang]?.steps_title || 'Comment ça marche'"></h2>
-            </div>
-            
-            <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-                <template x-for="(step, index) in (pageData[currentLang]?.steps || [])" :key="index">
-                    <div class="relative">
-                        <div class="text-center">
-                            <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                                <span class="text-3xl font-black text-white" x-text="step.number"></span>
-                            </div>
-                            <h3 class="text-xl font-bold mb-3 text-gray-900" x-text="step.title"></h3>
-                            <p class="text-gray-600 leading-relaxed" x-text="step.description"></p>
-                        </div>
-                        <!-- Arrow for desktop -->
-                        <div class="hidden md:block absolute top-10 right-0 transform translate-x-1/2" x-show="index < 2">
-                            <svg class="w-8 h-8 text-blue-300" :class="{'rotate-180': currentLang === 'ar'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                            </svg>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-    </section>
-
-
     <!-- Testimonials Section -->
-    <section class="py-16 lg:py-20 bg-white" x-cloak>
+    <section class="py-16 lg:py-20" x-cloak>
         <div class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-12">
                 <h2 class="text-3xl lg:text-4xl font-black text-gray-900 mb-4" x-text="pageData[currentLang]?.testimonials_title || 'Témoignages'"></h2>
@@ -738,7 +929,7 @@
     </section>
 
     <!-- FAQ Section -->
-    <section class="py-16 lg:py-20 bg-gray-50" x-cloak x-data="{ openFaq: null }">
+    <section class="py-16 lg:py-20" x-cloak x-data="{ openFaq: null }">
         <div class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-12">
                 <h2 class="text-3xl lg:text-4xl font-black text-gray-900 mb-4" x-text="pageData[currentLang]?.faqs_title || 'Questions Fréquentes'"></h2>
@@ -760,6 +951,82 @@
                     </div>
                 </template>
             </div>
+        </div>
+    </section>
+
+    <!-- Trust / COD Services -->
+    <section class="py-12 lg:py-16" @if($lpIsRtl) dir="rtl" @endif>
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-2xl lg:text-3xl font-black text-center mb-8 text-gray-900">
+                <span x-show="currentLang === 'ar'">خدماتنا لراحتك</span>
+                <span x-show="currentLang === 'fr'">Nos services pour vous</span>
+                <span x-show="currentLang === 'en'">Our services for you</span>
+            </h2>
+            <div class="cod-services-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.85rem;max-width:56rem;margin:0 auto;">
+                <div style="background:#fff;border:1px solid #dbeafe;border-radius:1rem;padding:1.1rem 0.85rem;text-align:center;box-shadow:0 8px 20px rgba(30,58,138,0.06);">
+                    <div style="width:3rem;height:3rem;margin:0 auto 0.65rem;border-radius:9999px;background:#dbeafe;display:flex;align-items:center;justify-content:center;">
+                        <svg style="width:1.6rem;height:1.6rem;color:#1d4ed8;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h11v8H3V7zm11 3h4l3 3v2h-7v-5zM6.5 18.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm10 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                        </svg>
+                    </div>
+                    <div style="font-weight:800;color:#1e3a8a;font-size:0.95rem;line-height:1.35;">
+                        <span x-show="currentLang === 'ar'">توصيل مجاني</span>
+                        <span x-show="currentLang === 'fr'">Livraison gratuite</span>
+                        <span x-show="currentLang === 'en'">Free shipping</span>
+                    </div>
+                </div>
+
+                <div style="background:#fff;border:1px solid #dbeafe;border-radius:1rem;padding:1.1rem 0.85rem;text-align:center;box-shadow:0 8px 20px rgba(30,58,138,0.06);">
+                    <div style="width:3rem;height:3rem;margin:0 auto 0.65rem;border-radius:9999px;background:#dcfce7;display:flex;align-items:center;justify-content:center;">
+                        <svg style="width:1.6rem;height:1.6rem;color:#15803d;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a1 1 0 11-2 0 1 1 0 012 0z"/>
+                        </svg>
+                    </div>
+                    <div style="font-weight:800;color:#1e3a8a;font-size:0.95rem;line-height:1.35;">
+                        <span x-show="currentLang === 'ar'">الدفع عند الاستلام</span>
+                        <span x-show="currentLang === 'fr'">Paiement à la livraison</span>
+                        <span x-show="currentLang === 'en'">Cash on delivery</span>
+                    </div>
+                </div>
+
+                <div style="background:#fff;border:1px solid #dbeafe;border-radius:1rem;padding:1.1rem 0.85rem;text-align:center;box-shadow:0 8px 20px rgba(30,58,138,0.06);">
+                    <div style="width:3rem;height:3rem;margin:0 auto 0.65rem;border-radius:9999px;background:#fef3c7;display:flex;align-items:center;justify-content:center;">
+                        <svg style="width:1.6rem;height:1.6rem;color:#b45309;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </div>
+                    <div style="font-weight:800;color:#1e3a8a;font-size:0.95rem;line-height:1.35;">
+                        <span x-show="currentLang === 'ar'">أداء آمن</span>
+                        <span x-show="currentLang === 'fr'">Paiement sécurisé</span>
+                        <span x-show="currentLang === 'en'">Secure payment</span>
+                    </div>
+                </div>
+
+                <div style="background:#fff;border:1px solid #dbeafe;border-radius:1rem;padding:1.1rem 0.85rem;text-align:center;box-shadow:0 8px 20px rgba(30,58,138,0.06);">
+                    <div style="width:3rem;height:3rem;margin:0 auto 0.65rem;border-radius:9999px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;">
+                        <svg style="width:1.6rem;height:1.6rem;color:#4338ca;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <div style="font-weight:800;color:#1e3a8a;font-size:0.95rem;line-height:1.35;">
+                        @if($isMoroccoMarket)
+                            <span x-show="currentLang === 'ar'">التوصيل لجميع مدن المغرب</span>
+                            <span x-show="currentLang === 'fr'">Livraison dans toutes les villes du Maroc</span>
+                            <span x-show="currentLang === 'en'">Delivery to all cities of Morocco</span>
+                        @else
+                            <span x-show="currentLang === 'ar'">التوصيل لجميع المدن</span>
+                            <span x-show="currentLang === 'fr'">Livraison dans tout le pays</span>
+                            <span x-show="currentLang === 'en'">Nationwide delivery</span>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            <style>
+                @media (min-width: 768px) {
+                    .cod-services-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+                }
+            </style>
         </div>
     </section>
 
@@ -837,18 +1104,18 @@
             
             // Remove active state from all options
             document.querySelectorAll('.promotion-option-form').forEach(opt => {
-                opt.classList.remove('border-yellow-300');
-                opt.classList.add('border-white/20');
+                opt.classList.remove('border-amber-400', 'bg-amber-50');
+                opt.classList.add('border-gray-200', 'bg-gray-50');
             });
             
             // Add active state to selected option
-            option.classList.remove('border-white/20');
-            option.classList.add('border-yellow-300');
+            option.classList.remove('border-gray-200');
+            option.classList.add('border-amber-400', 'bg-amber-50');
             
             // Update the price display
             const priceDisplay = document.getElementById('promotionPriceDisplay');
             if (priceDisplay) {
-                priceDisplay.innerHTML = formatPriceJs(price) + ' <span class="text-xl">درهم</span>';
+                priceDisplay.innerHTML = formatPriceJs(price) + ' <span class="text-xl">{{ $lpCurrencySymbol }}</span>';
             }
             
             // Update discount badge
@@ -894,20 +1161,20 @@
             
             // Remove active state from all options
             document.querySelectorAll('.variation-option-form').forEach(opt => {
-                opt.classList.remove('border-white/50');
-                opt.classList.add('border-white/20');
+                opt.classList.remove('border-blue-500', 'bg-blue-50');
+                opt.classList.add('border-gray-200', 'bg-gray-50');
             });
             
             // Add active state to selected option
-            option.classList.remove('border-white/20');
-            option.classList.add('border-white/50');
+            option.classList.remove('border-gray-200');
+            option.classList.add('border-blue-500', 'bg-blue-50');
             
             // Update price display in form
             const priceContainer = document.getElementById('variationPriceForm');
             if (priceContainer) {
                 // Format price - show decimals only when needed
                 let formattedPrice = price % 1 === 0 ? price.toFixed(0) : parseFloat(price.toFixed(2)).toString();
-                let priceHtml = formattedPrice + ' <span class="text-xl">درهم</span>';
+                let priceHtml = formattedPrice + ' <span class="text-xl">{{ $lpCurrencySymbol }}</span>';
                 priceContainer.innerHTML = priceHtml;
             }
             
@@ -954,7 +1221,7 @@
                     btn.setAttribute('aria-busy', 'true');
                     const label = btn.querySelector('.submit-label');
                     if (label) {
-                        label.textContent = 'جاري الإرسال...';
+                        label.textContent = @json($formCopy['submitting'] ?? '...');
                     }
                 }
             });
@@ -987,15 +1254,5 @@
         }
     </style>
 
-    <!-- Footer -->
-    <footer class="bg-gray-900 text-white py-8 pb-24">
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p class="text-lg">&copy; {{ date('Y') }} {{ config('app.name') }}. 
-                <span x-show="currentLang === 'fr'">Tous droits réservés.</span>
-                <span x-show="currentLang === 'en'">All rights reserved.</span>
-                <span x-show="currentLang === 'ar'">جميع الحقوق محفوظة.</span>
-            </p>
-        </div>
-    </footer>
 </body>
 </html>

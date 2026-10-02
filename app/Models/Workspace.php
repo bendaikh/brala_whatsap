@@ -13,6 +13,8 @@ class Workspace extends Model
         'user_id',
         'name',
         'description',
+        'language',
+        'currency',
         'is_active',
     ];
 
@@ -48,5 +50,93 @@ class Workspace extends Model
     public function aiApiSetting()
     {
         return $this->hasOne(AiApiSetting::class);
+    }
+
+    public function serviceIntegrations()
+    {
+        return $this->hasMany(WorkspaceServiceIntegration::class);
+    }
+
+    public function googleSheetConnections()
+    {
+        return $this->hasMany(GoogleSheetConnection::class);
+    }
+
+    public function getLanguage(): string
+    {
+        $language = $this->language ?: config('workspace.defaults.language', 'ar');
+        $languages = config('workspace.languages', []);
+
+        return array_key_exists($language, $languages) ? $language : 'ar';
+    }
+
+    public function getCurrency(): string
+    {
+        $currency = $this->currency ?: config('workspace.defaults.currency', 'MAD');
+        $currencies = config('workspace.currencies', []);
+
+        return array_key_exists($currency, $currencies) ? $currency : 'MAD';
+    }
+
+    public function getLanguageConfig(): array
+    {
+        return config('workspace.languages.' . $this->getLanguage(), config('workspace.languages.ar'));
+    }
+
+    public function getCurrencyConfig(): array
+    {
+        return config('workspace.currencies.' . $this->getCurrency(), config('workspace.currencies.MAD'));
+    }
+
+    public function getCurrencySymbol(): string
+    {
+        return $this->getCurrencyConfig()['symbol'] ?? $this->getCurrency();
+    }
+
+    public function getCurrencyCode(): string
+    {
+        return $this->getCurrencyConfig()['code'] ?? $this->getCurrency();
+    }
+
+    public function isRtl(): bool
+    {
+        return ($this->getLanguageConfig()['dir'] ?? 'ltr') === 'rtl';
+    }
+
+    public function getHtmlLang(): string
+    {
+        return $this->getLanguageConfig()['html_lang'] ?? $this->getLanguage();
+    }
+
+    public function getLandingPageColumn(): string
+    {
+        return 'landing_page_' . $this->getLanguage();
+    }
+
+    /**
+     * Moroccan Darija for Arabic + MAD (or legacy Morocco-named workspaces).
+     */
+    public function usesDarija(): bool
+    {
+        if ($this->getLanguage() === 'ar' && $this->getCurrency() === 'MAD') {
+            return true;
+        }
+
+        $name = mb_strtolower((string) $this->name);
+
+        return str_contains($name, 'maroc')
+            || str_contains($name, 'morocco')
+            || str_contains($name, 'مغرب')
+            || str_contains($name, 'المغرب');
+    }
+
+    public function getLanguageLabel(): string
+    {
+        return $this->getLanguageConfig()['label'] ?? strtoupper($this->getLanguage());
+    }
+
+    public function getCurrencyLabel(): string
+    {
+        return $this->getCurrencyConfig()['label'] ?? $this->getCurrency();
     }
 }

@@ -122,6 +122,25 @@
                                     </svg>
                                     Create Store
                                 </a>
+
+                                <div class="border-t border-gray-200 my-4"></div>
+
+                                <!-- Services Integration (per active workspace) -->
+                                <p class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Services Integration</p>
+
+                                <a href="{{ route('stores.services-integration') }}" class="{{ request()->routeIs('stores.services-integration*') ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50' }} flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                    </svg>
+                                    Service Companies
+                                </a>
+
+                                <a href="{{ route('stores.google-sheets') }}" class="{{ request()->routeIs('stores.google-sheets*') ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50' }} flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    Google Sheets
+                                </a>
                             @endif
 
                             <div class="border-t border-gray-200 my-4"></div>

@@ -140,7 +140,7 @@
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-sm font-medium text-gray-600">Total Revenue</p>
-                                <p class="text-3xl font-bold text-gray-900 mt-2">{{ number_format($stats['total_revenue'], 2) }} DHS</p>
+                                <p class="text-3xl font-bold text-gray-900 mt-2">{{ number_format($stats['total_revenue'], 2) }} {{ isset($activeWorkspace) ? $activeWorkspace->getCurrencySymbol() : (config('workspace.currencies.MAD.symbol') ?? 'DHS') }}</p>
                                 <p class="text-xs text-gray-500 mt-1">Completed orders</p>
                             </div>
                             <div class="p-3 bg-yellow-100 rounded-full">

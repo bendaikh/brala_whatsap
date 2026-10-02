@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\StorefrontCopy;
 use Illuminate\Database\Eloquent\Model;
 
 class WebsiteSettings extends Model
@@ -62,24 +63,33 @@ class WebsiteSettings extends Model
         if ($storeId) {
             $where['store_id'] = $storeId;
         }
-        
-        return static::firstOrCreate(
+
+        $workspace = null;
+        if ($storeId) {
+            $store = Store::with('workspace')->find($storeId);
+            $workspace = $store?->workspace;
+        }
+
+        $defaults = StorefrontCopy::settingsDefaults($workspace);
+
+        $settings = static::firstOrCreate(
             $where,
-            [
+            array_merge([
                 'site_name' => config('app.name'),
-                'hero_title' => 'مرحباً بكم في متجرنا',
-                'hero_subtitle' => 'اكتشف منتجات فريدة تم اختيارها بعناية من أجلك',
-                'banner_text' => 'المتجر الإلكتروني رقم 1 في المغرب! مباشرة من عندنا إلى عندكم',
-                'contact_phone' => '(212) 661-360879',
-                'footer_about' => 'متجركم الموثوق للمنتجات عالية الجودة.',
-                'footer_copyright' => '© 2026 ' . config('app.name') . '. جميع الحقوق محفوظة.',
-                'features' => [
-                    ['icon' => 'local_shipping', 'title' => 'توصيل مجاني', 'color' => '#10b981'],
-                    ['icon' => 'support_agent', 'title' => 'خدمة العملاء', 'color' => '#3b82f6'],
-                    ['icon' => 'public', 'title' => 'متوفر في المغرب', 'color' => '#a855f7'],
-                    ['icon' => 'payment', 'title' => 'الدفع عند الاستلام', 'color' => '#f97316'],
-                ],
-            ]
+            ], $defaults)
         );
+
+        // If this store belongs to a non-Arabic workspace but still has Arabic seed
+        // content (created before language support), refresh the default copy once.
+        if (
+            $workspace
+            && $workspace->getLanguage() !== 'ar'
+            && StorefrontCopy::looksLikeArabicSeed($settings->hero_title)
+        ) {
+            $settings->fill($defaults);
+            $settings->save();
+        }
+
+        return $settings;
     }
 }

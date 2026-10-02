@@ -9,6 +9,7 @@ class Store extends Model
 {
     protected $fillable = [
         'workspace_id',
+        'service_integration_id',
         'user_id',
         'name',
         'subdomain',
@@ -42,6 +43,11 @@ class Store extends Model
     public function workspace()
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    public function serviceIntegration()
+    {
+        return $this->belongsTo(WorkspaceServiceIntegration::class, 'service_integration_id');
     }
 
     public function user()

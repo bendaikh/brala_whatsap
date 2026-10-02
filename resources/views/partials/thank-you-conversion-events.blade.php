@@ -1,6 +1,7 @@
 @php
     $product = $lead->product;
     $orderValue = (float) ($lead->selected_price ?? $product->price);
+    $currencyCode = ($store->workspace ?? null)?->getCurrencyCode() ?? 'MAD';
 @endphp
 
 @if($trackConversion)
@@ -12,7 +13,7 @@
                 content_id: @json((string) $product->id),
                 content_type: 'product',
                 value: {{ $orderValue }},
-                currency: 'MAD'
+                currency: @json($currencyCode)
             });
         }
     </script>

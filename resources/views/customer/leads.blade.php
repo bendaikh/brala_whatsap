@@ -6,6 +6,16 @@
         </div>
     </x-slot>
 
+    @php
+        $currencySymbol = isset($activeWorkspace) ? $activeWorkspace->getCurrencySymbol() : (config('workspace.currencies.MAD.symbol') ?? 'DHS');
+    @endphp
+
+    @if(session('success'))
+    <div class="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-400">
+        {{ session('success') }}
+    </div>
+    @endif
+
     <div class="bg-[#0f1c2e] border border-white/10 rounded-xl overflow-hidden">
         @if($leads->isEmpty())
             <div class="text-center py-16">
@@ -16,10 +26,33 @@
                 <p class="text-gray-500">Les demandes de contact des visiteurs apparaîtront ici</p>
             </div>
         @else
+            <!-- Bulk actions bar -->
+            <div id="bulkActionsBar" class="hidden px-6 py-3 bg-red-500/10 border-b border-red-500/30 flex flex-wrap items-center justify-between gap-3">
+                <p class="text-red-300 text-sm">
+                    <span id="selectedCount">0</span> lead(s) sélectionné(s)
+                </p>
+                <button type="button" onclick="confirmBulkDelete()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition flex items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    Supprimer la sélection
+                </button>
+            </div>
+
+            <form id="bulkDeleteForm" method="POST" action="{{ route('app.orders.bulk-destroy') }}" class="hidden">
+                @csrf
+                <input type="hidden" name="from" value="leads">
+                <div id="bulkDeleteIds"></div>
+            </form>
+
             <div class="overflow-x-auto">
                 <table class="w-full">
                     <thead class="bg-[#0a1628] border-b border-white/10">
                         <tr>
+                            <th class="px-6 py-4 text-left">
+                                <input type="checkbox" id="selectAllLeads" onchange="toggleSelectAll(this)"
+                                    class="w-4 h-4 rounded border-white/20 bg-[#0f1c2e] text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer">
+                            </th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Date</th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Produit</th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Nom</th>
@@ -32,6 +65,10 @@
                     <tbody class="divide-y divide-white/5">
                         @foreach($leads as $lead)
                             <tr class="hover:bg-white/5 transition">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <input type="checkbox" class="lead-checkbox w-4 h-4 rounded border-white/20 bg-[#0f1c2e] text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer"
+                                        value="{{ $lead->id }}" onchange="updateBulkSelection()">
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                                     {{ $lead->created_at->format('d/m/Y H:i') }}
                                 </td>
@@ -93,12 +130,17 @@
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                             </svg>
                                         </a>
+                                        <button type="button" onclick="confirmDeleteLead({{ $lead->id }})" class="p-2 text-gray-400 hover:text-red-400 transition rounded-lg hover:bg-white/10" title="Supprimer">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
                             <!-- Expandable Details Row -->
                             <tr id="lead-details-{{ $lead->id }}" class="hidden bg-[#1a2d42]/50">
-                                <td colspan="7" class="px-6 py-4">
+                                <td colspan="8" class="px-6 py-4">
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <!-- Customer Info -->
                                         <div class="bg-[#0f1c2e] rounded-lg p-4">
@@ -161,7 +203,7 @@
                                                 </div>
                                                 <div class="flex justify-between">
                                                     <dt class="text-gray-400">Prix sélectionné:</dt>
-                                                    <dd class="text-green-400 font-semibold">{{ $lead->selected_price ? number_format($lead->selected_price, 2) . ' DHS' : 'N/A' }}</dd>
+                                                    <dd class="text-green-400 font-semibold">{{ $lead->selected_price ? number_format($lead->selected_price, 2) . ' ' . $currencySymbol : 'N/A' }}</dd>
                                                 </div>
                                                 @if($lead->promotion)
                                                 <div class="flex justify-between">
@@ -170,7 +212,7 @@
                                                 </div>
                                                 <div class="flex justify-between">
                                                     <dt class="text-gray-400">Prix promotion:</dt>
-                                                    <dd class="text-yellow-400">{{ $lead->promotion->price ? number_format($lead->promotion->price, 2) . ' DHS' : 'N/A' }}</dd>
+                                                    <dd class="text-yellow-400">{{ $lead->promotion->price ? number_format($lead->promotion->price, 2) . ' ' . $currencySymbol : 'N/A' }}</dd>
                                                 </div>
                                                 @endif
                                                 @if($lead->variation)
@@ -192,7 +234,7 @@
                                                 </div>
                                                 <div class="flex justify-between">
                                                     <dt class="text-gray-400">Prix variante:</dt>
-                                                    <dd class="text-blue-400">{{ $lead->variation->price ? number_format($lead->variation->price, 2) . ' DHS' : 'N/A' }}</dd>
+                                                    <dd class="text-blue-400">{{ $lead->variation->price ? number_format($lead->variation->price, 2) . ' ' . $currencySymbol : 'N/A' }}</dd>
                                                 </div>
                                                 @endif
                                             </dl>
@@ -271,10 +313,100 @@
             </div>
 
             @if($leads->hasPages())
-                <div class="px-6 py-4 bg-[#0a1628] border-t border-white/10">
-                    {{ $leads->links() }}
+                <div class="px-6 py-4 bg-[#0a1628] border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <p class="text-sm text-gray-400">
+                        Affichage de {{ $leads->firstItem() }} à {{ $leads->lastItem() }} sur {{ $leads->total() }} leads
+                    </p>
+                    <div class="leads-pagination">
+                        {{ $leads->links() }}
+                    </div>
+                </div>
+            @else
+                <div class="px-6 py-3 bg-[#0a1628] border-t border-white/10">
+                    <p class="text-sm text-gray-400">{{ $leads->total() }} lead(s)</p>
                 </div>
             @endif
+
+            <!-- Single Delete Confirmation Modal -->
+            <div id="deleteModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
+                <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6 max-w-md w-full">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-white">Supprimer le lead</h3>
+                            <p class="text-sm text-gray-400">Cette action est irréversible</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-6">Êtes-vous sûr de vouloir supprimer le lead <span id="deleteLeadLabel" class="font-semibold text-white"></span> ?</p>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
+                            Annuler
+                        </button>
+                        <form id="deleteForm" method="POST" class="inline">
+                            @csrf
+                            @method('DELETE')
+                            <input type="hidden" name="from" value="leads">
+                            <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition">
+                                Supprimer
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Delete Confirmation Modal -->
+            <div id="bulkDeleteModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
+                <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6 max-w-md w-full">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-white">Supprimer les leads</h3>
+                            <p class="text-sm text-gray-400">Cette action est irréversible</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-6">Êtes-vous sûr de vouloir supprimer <span id="bulkDeleteCount" class="font-semibold text-white">0</span> lead(s) sélectionné(s) ?</p>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeBulkDeleteModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
+                            Annuler
+                        </button>
+                        <button type="button" onclick="submitBulkDelete()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition">
+                            Supprimer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .leads-pagination nav { display: flex; justify-content: center; }
+                .leads-pagination nav > div:first-child { display: none; }
+                .leads-pagination span[aria-current="page"] span {
+                    background-color: #0891b2 !important;
+                    border-color: #0891b2 !important;
+                    color: #fff !important;
+                }
+                .leads-pagination a span {
+                    background-color: #1a2d42 !important;
+                    border-color: rgba(255,255,255,0.1) !important;
+                    color: #e5e7eb !important;
+                }
+                .leads-pagination a:hover span {
+                    background-color: #243b55 !important;
+                    color: #fff !important;
+                }
+                .leads-pagination span[aria-disabled="true"] span {
+                    background-color: #1a2d42 !important;
+                    border-color: rgba(255,255,255,0.1) !important;
+                    color: #9ca3af !important;
+                }
+            </style>
         @endif
     </div>
     
@@ -285,5 +417,92 @@
                 detailsRow.classList.toggle('hidden');
             }
         }
+
+        function toggleSelectAll(master) {
+            document.querySelectorAll('.lead-checkbox').forEach(cb => {
+                cb.checked = master.checked;
+            });
+            updateBulkSelection();
+        }
+
+        function updateBulkSelection() {
+            const checkboxes = document.querySelectorAll('.lead-checkbox');
+            const checked = document.querySelectorAll('.lead-checkbox:checked');
+            const bar = document.getElementById('bulkActionsBar');
+            const countEl = document.getElementById('selectedCount');
+            const selectAll = document.getElementById('selectAllLeads');
+
+            if (countEl) countEl.textContent = checked.length;
+
+            if (bar) {
+                if (checked.length > 0) {
+                    bar.classList.remove('hidden');
+                } else {
+                    bar.classList.add('hidden');
+                }
+            }
+
+            if (selectAll && checkboxes.length) {
+                selectAll.checked = checked.length === checkboxes.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+            }
+        }
+
+        function confirmDeleteLead(leadId) {
+            const modal = document.getElementById('deleteModal');
+            const form = document.getElementById('deleteForm');
+            const label = document.getElementById('deleteLeadLabel');
+
+            form.action = `/app/orders/${leadId}`;
+            label.textContent = '#' + leadId;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeDeleteModal() {
+            const modal = document.getElementById('deleteModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmBulkDelete() {
+            const checked = document.querySelectorAll('.lead-checkbox:checked');
+            if (!checked.length) return;
+
+            document.getElementById('bulkDeleteCount').textContent = checked.length;
+            const modal = document.getElementById('bulkDeleteModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeBulkDeleteModal() {
+            const modal = document.getElementById('bulkDeleteModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function submitBulkDelete() {
+            const checked = document.querySelectorAll('.lead-checkbox:checked');
+            const container = document.getElementById('bulkDeleteIds');
+            container.innerHTML = '';
+
+            checked.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = cb.value;
+                container.appendChild(input);
+            });
+
+            document.getElementById('bulkDeleteForm').submit();
+        }
+
+        document.getElementById('deleteModal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeDeleteModal();
+        });
+        document.getElementById('bulkDeleteModal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeBulkDeleteModal();
+        });
     </script>
 </x-customer-layout>

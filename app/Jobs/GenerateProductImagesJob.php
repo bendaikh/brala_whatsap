@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use App\Support\WebpImage;
 
 class GenerateProductImagesJob implements ShouldQueue
 {
@@ -71,8 +72,7 @@ class GenerateProductImagesJob implements ShouldQueue
                         $imageUrl = $response->json()['data'][0]['url'];
                         
                         $imageContent = Http::timeout(60)->get($imageUrl)->body();
-                        $filename = 'products/ai-generated/' . uniqid() . '-' . time() . '.png';
-                        Storage::disk('public')->put($filename, $imageContent);
+                        $filename = WebpImage::storeBinary($imageContent, 'products/ai-generated');
                         
                         $generatedImages[] = Storage::url($filename);
                         
@@ -101,6 +101,17 @@ class GenerateProductImagesJob implements ShouldQueue
                     'ai_images_progress' => 100,
                 ]);
                 Log::info("Successfully generated " . count($generatedImages) . " images for product: {$this->product->id}");
+
+                // If description is still empty, rebuild it from uploaded product images
+                try {
+                    $user = \App\Models\User::find($this->userId);
+                    if ($user) {
+                        $aiService = new \App\Services\AiLandingPageService($user);
+                        $aiService->ensureProductDescriptionFromImages($this->product->fresh());
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Could not sync description after AI images for product ' . $this->product->id . ': ' . $e->getMessage());
+                }
             } else {
                 throw new \Exception('No images were generated successfully');
             }

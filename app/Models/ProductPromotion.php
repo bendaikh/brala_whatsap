@@ -13,6 +13,7 @@ class ProductPromotion extends Model
         'min_quantity',
         'max_quantity',
         'price',
+        'compare_at_price',
         'promotion_type',
         'is_active',
         'order',
@@ -20,6 +21,7 @@ class ProductPromotion extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'compare_at_price' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 
@@ -43,8 +45,13 @@ class ProductPromotion extends Model
 
     public function getDiscountPercentageAttribute()
     {
-        $basePrice = $this->variation ? $this->variation->price : $this->product->price;
-        
+        $compareAt = $this->compare_at_price;
+        if ($compareAt && $compareAt > $this->price) {
+            return round((($compareAt - $this->price) / $compareAt) * 100);
+        }
+
+        $basePrice = $this->variation ? $this->variation->price : ($this->product->compare_at_price ?: $this->product->price);
+
         if ($basePrice && $basePrice > $this->price) {
             return round((($basePrice - $this->price) / $basePrice) * 100);
         }

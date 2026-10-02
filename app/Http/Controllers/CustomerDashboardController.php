@@ -9,6 +9,7 @@ use App\Models\Message;
 use App\Services\AiLandingPageService;
 use App\Jobs\GenerateProductLandingPageJob;
 use App\Support\LandingFormFields;
+use App\Support\WebpImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
@@ -18,6 +19,48 @@ class CustomerDashboardController extends Controller
     protected function getActiveStoreId()
     {
         return session('active_store_id');
+    }
+
+    protected function workspaceGoogleSheets(?int $workspaceId = null)
+    {
+        $workspaceId = $workspaceId ?: session('active_workspace_id');
+
+        if (!$workspaceId) {
+            $storeId = $this->getActiveStoreId();
+            if ($storeId) {
+                $workspaceId = \App\Models\Store::where('id', $storeId)->value('workspace_id');
+            }
+        }
+
+        if (!$workspaceId) {
+            return collect();
+        }
+
+        return \App\Models\GoogleSheetConnection::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('user_id', auth()->id())
+            ->orderBy('name')
+            ->get();
+    }
+
+    protected function validateGoogleSheetConnectionId($value): array
+    {
+        $workspaceId = session('active_workspace_id');
+        if (!$workspaceId) {
+            $storeId = $this->getActiveStoreId();
+            $workspaceId = $storeId
+                ? \App\Models\Store::where('id', $storeId)->value('workspace_id')
+                : null;
+        }
+
+        $rule = \Illuminate\Validation\Rule::exists('google_sheet_connections', 'id')
+            ->where('user_id', auth()->id());
+
+        if ($workspaceId) {
+            $rule->where('workspace_id', $workspaceId);
+        }
+
+        return ['nullable', 'integer', $rule];
     }
 
     protected function getBlockedIpAddresses(): array
@@ -337,7 +380,7 @@ class CustomerDashboardController extends Controller
             });
         }
         
-        $orders = $query->latest()->paginate(20);
+        $orders = $query->latest()->paginate(20)->withQueryString();
         $blockedIpAddresses = $this->getBlockedIpAddresses();
 
         return view('customer.orders', compact('orders', 'blockedIpAddresses'));
@@ -370,6 +413,54 @@ class CustomerDashboardController extends Controller
         return redirect()
             ->route('app.orders')
             ->with('success', 'Commande mise à jour avec succès.');
+    }
+
+    public function destroyOrder(\App\Models\ProductLead $lead)
+    {
+        $this->authorizeLead($lead);
+
+        $lead->delete();
+
+        return $this->redirectAfterLeadDelete('Commande supprimée avec succès.');
+    }
+
+    public function bulkDestroyOrders(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:product_leads,id',
+        ]);
+
+        $user = auth()->user();
+        $storeId = $this->getActiveStoreId();
+
+        $query = \App\Models\ProductLead::where('user_id', $user->id)
+            ->whereIn('id', $validated['ids']);
+
+        if ($storeId) {
+            $query->whereHas('product', function ($q) use ($storeId) {
+                $q->where('store_id', $storeId);
+            });
+        }
+
+        $deleted = $query->delete();
+
+        return $this->redirectAfterLeadDelete($deleted . ' commande(s) supprimée(s) avec succès.');
+    }
+
+    protected function redirectAfterLeadDelete(string $message)
+    {
+        $from = request()->input('from');
+
+        if ($from === 'leads') {
+            return redirect()->route('app.leads')->with('success', $message);
+        }
+
+        if ($from === 'orders') {
+            return redirect()->route('app.orders')->with('success', $message);
+        }
+
+        return redirect()->back()->with('success', $message);
     }
 
     protected function authorizeLead(\App\Models\ProductLead $lead): void
@@ -415,7 +506,8 @@ class CustomerDashboardController extends Controller
         $theme = 'theme1'; // Always use theme1
 
         $storeId = $this->getActiveStoreId();
-        $store = $storeId ? \App\Models\Store::find($storeId) : null;
+        $store = $storeId ? \App\Models\Store::with('workspace')->find($storeId) : null;
+        $workspaceLang = $store?->workspace?->getLanguage() ?? 'ar';
 
         $query = \App\Models\Category::where('is_active', true);
 
@@ -424,8 +516,9 @@ class CustomerDashboardController extends Controller
         }
 
         $categories = $query->orderBy('order')->orderBy('name')->get();
+        $googleSheets = $this->workspaceGoogleSheets($store?->workspace_id);
 
-        return view('customer.products-create', compact('categories', 'theme', 'store'));
+        return view('customer.products-create', compact('categories', 'theme', 'store', 'googleSheets', 'workspaceLang'));
     }
     
     public function productsStore(Request $request)
@@ -465,7 +558,6 @@ class CustomerDashboardController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|alpha_dash',
             'description' => 'nullable|string',
             'theme' => 'nullable|string|in:theme1',
             'theme_data' => 'nullable|array',
@@ -473,7 +565,9 @@ class CustomerDashboardController extends Controller
             'compare_at_price' => 'nullable|numeric|min:0',
             'category_id' => 'nullable|exists:categories,id',
             'images' => 'nullable|array',
-            'images.*' => 'image|max:2048',
+            'images.*' => 'image|max:10240',
+            'preuploaded_images' => 'nullable|array',
+            'preuploaded_images.*' => 'nullable|string|max:500',
             'stock' => 'nullable|integer|min:0',
             'sku' => 'nullable|string|max:255',
             'has_variations' => 'nullable|boolean',
@@ -491,24 +585,26 @@ class CustomerDashboardController extends Controller
             'promotions.*.min_quantity' => 'required_with:promotions|integer|min:1',
             'promotions.*.max_quantity' => 'nullable|integer|min:1',
             'promotions.*.price' => 'required_with:promotions|numeric|min:0',
+            'promotions.*.compare_at_price' => 'nullable|numeric|min:0',
             'landing_sections' => 'nullable|array',
-            'landing_sections.*.image' => 'nullable|image|max:2048',
+            'landing_sections.*.image' => 'nullable|image|max:10240',
             'landing_sections.*.title_fr' => 'nullable|string|max:255',
             'landing_sections.*.description_fr' => 'nullable|string',
             'landing_sections.*.title_en' => 'nullable|string|max:255',
             'landing_sections.*.description_en' => 'nullable|string',
             'landing_sections.*.title_ar' => 'nullable|string|max:255',
             'landing_sections.*.description_ar' => 'nullable|string',
+            'landing_page_background_color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'google_sheet_connection_id' => $this->validateGoogleSheetConnectionId(null),
         ]);
 
         $validated['user_id'] = auth()->id();
         $validated['store_id'] = $this->getActiveStoreId();
+        $validated['google_sheet_connection_id'] = $validated['google_sheet_connection_id'] ?? null;
         $validated['theme'] = $validated['theme'] ?? 'theme1';
         $validated['theme_data'] = $request->input('theme_data');
-        // Use provided slug or generate from name with timestamp to ensure uniqueness
-        $validated['slug'] = !empty($validated['slug']) 
-            ? \Str::slug($validated['slug']) 
-            : \Str::slug($validated['name']) . '-' . time();
+        // Always auto-generate slug from name (ignore any submitted value)
+        $validated['slug'] = \Str::slug($validated['name']) . '-' . time();
         $validated['is_active'] = $request->has('is_active');
         $validated['is_featured'] = $request->has('is_featured');
         $validated['has_variations'] = $hasVariations;
@@ -526,45 +622,16 @@ class CustomerDashboardController extends Controller
         if ($request->hasFile('images')) {
             $imagePaths = [];
             foreach ($request->file('images') as $image) {
-                $imagePaths[] = $image->store('products', 'public');
+                $imagePaths[] = WebpImage::store($image, 'products');
             }
             $validated['images'] = $imagePaths;
+        } elseif ($request->filled('preuploaded_images')) {
+            // Images already uploaded via AJAX for description sync (already WebP)
+            $validated['images'] = array_values(array_filter((array) $request->input('preuploaded_images')));
         }
         
-        if ($request->has('landing_sections')) {
-            $landingSections = [];
-            foreach ($request->input('landing_sections', []) as $index => $section) {
-                if (!empty($section['auto_generated'])) {
-                    $imageIndex = $section['image_index'] ?? 0;
-                    $sectionData = [
-                        'image_index' => $imageIndex,
-                        'pending_ai' => true,
-                    ];
-                    $landingSections[] = $sectionData;
-                } else {
-                    $sectionData = [
-                        'title_fr' => $section['title_fr'] ?? '',
-                        'description_fr' => $section['description_fr'] ?? '',
-                        'title_en' => $section['title_en'] ?? '',
-                        'description_en' => $section['description_en'] ?? '',
-                        'title_ar' => $section['title_ar'] ?? '',
-                        'description_ar' => $section['description_ar'] ?? '',
-                    ];
-                    
-                    if ($request->hasFile("landing_sections.{$index}.image")) {
-                        $sectionData['image'] = $request->file("landing_sections.{$index}.image")->store('products/landing-sections', 'public');
-                    }
-                    
-                    if (!empty($sectionData['title_fr']) || !empty($sectionData['description_fr'])) {
-                        $landingSections[] = $sectionData;
-                    }
-                }
-            }
-            
-            if (!empty($landingSections)) {
-                $validated['landing_page_sections'] = $landingSections;
-            }
-        }
+        // Landing page sections removed from create UI — content lives in description
+        $validated['landing_page_sections'] = [];
         
         if ($request->boolean('generate_landing_page')) {
             $validated['landing_page_status'] = 'pending';
@@ -590,6 +657,18 @@ class CustomerDashboardController extends Controller
         }
         
         $product = \App\Models\Product::create($validated);
+
+        // Safety net: if create-form Quill sync failed, build description from uploaded images
+        if (AiLandingPageService::isDescriptionEmpty($product->description)
+            && !empty($product->images)
+        ) {
+            try {
+                $aiService = new AiLandingPageService(auth()->user());
+                $aiService->ensureProductDescriptionFromImages($product);
+            } catch (\Throwable $e) {
+                \Log::warning('Failed to backfill description on create for product ' . $product->id . ': ' . $e->getMessage());
+            }
+        }
         
         // Handle product variations
         if ($hasVariations && $request->has('variations')) {
@@ -644,6 +723,7 @@ class CustomerDashboardController extends Controller
                     'min_quantity' => $promotionData['min_quantity'],
                     'max_quantity' => $promotionData['max_quantity'] ?? null,
                     'price' => $promotionData['price'],
+                    'compare_at_price' => !empty($promotionData['compare_at_price']) ? $promotionData['compare_at_price'] : null,
                     'is_active' => true,
                 ]);
             }
@@ -663,10 +743,20 @@ class CustomerDashboardController extends Controller
         
         if (!empty($jobsDispatched)) {
             $message = 'Product created successfully! ' . implode(' and ', $jobsDispatched) . ' generation started in the background.';
-            return redirect()->route('app.products')->with('success', $message);
+        } else {
+            $message = 'Product created successfully!';
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'product_id' => $product->id,
+                'redirect' => route('app.products'),
+            ]);
         }
         
-        return redirect()->route('app.products')->with('success', 'Product created successfully!');
+        return redirect()->route('app.products')->with('success', $message);
     }
     
     public function productsEdit($id)
@@ -688,7 +778,20 @@ class CustomerDashboardController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('customer.products-edit', compact('product', 'categories'));
+        $store = $storeId
+            ? \App\Models\Store::with('workspace')->find($storeId)
+            : null;
+
+        if (!$store && $product->store_id) {
+            $store = \App\Models\Store::with('workspace')->find($product->store_id);
+        } elseif ($store && !$store->relationLoaded('workspace')) {
+            $store->load('workspace');
+        }
+
+        $workspaceLang = $store?->workspace?->getLanguage() ?? 'ar';
+        $googleSheets = $this->workspaceGoogleSheets($store?->workspace_id);
+
+        return view('customer.products-edit', compact('product', 'categories', 'googleSheets', 'store', 'workspaceLang'));
     }
     
     public function productsUpdate(Request $request, $id)
@@ -740,7 +843,7 @@ class CustomerDashboardController extends Controller
             'compare_at_price' => 'nullable|numeric|min:0',
             'category_id' => 'nullable|exists:categories,id',
             'images' => 'nullable|array',
-            'images.*' => 'image|max:2048',
+            'images.*' => 'image|max:10240',
             'stock' => 'nullable|integer|min:0',
             'sku' => 'nullable|string|max:255',
             'has_variations' => 'nullable|boolean',
@@ -760,8 +863,9 @@ class CustomerDashboardController extends Controller
             'promotions.*.min_quantity' => 'required_with:promotions|integer|min:1',
             'promotions.*.max_quantity' => 'nullable|integer|min:1',
             'promotions.*.price' => 'required_with:promotions|numeric|min:0',
+            'promotions.*.compare_at_price' => 'nullable|numeric|min:0',
             'landing_sections' => 'nullable|array',
-            'landing_sections.*.image' => 'nullable|image|max:2048',
+            'landing_sections.*.image' => 'nullable|image|max:10240',
             'landing_sections.*.existing_image' => 'nullable|string',
             'landing_sections.*.title_fr' => 'nullable|string|max:255',
             'landing_sections.*.description_fr' => 'nullable|string',
@@ -769,12 +873,21 @@ class CustomerDashboardController extends Controller
             'landing_sections.*.description_en' => 'nullable|string',
             'landing_sections.*.title_ar' => 'nullable|string|max:255',
             'landing_sections.*.description_ar' => 'nullable|string',
+            'landing_page_background_color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'testimonials' => 'nullable|array',
+            'testimonials.*.name' => 'nullable|string|max:255',
+            'google_sheet_connection_id' => $this->validateGoogleSheetConnectionId(null),
         ]);
 
         $validated['is_active'] = $request->has('is_active');
         $validated['is_featured'] = $request->has('is_featured');
         $validated['has_variations'] = $hasVariations;
         $validated['has_promotions'] = $hasPromotions;
+        $validated['google_sheet_connection_id'] = $validated['google_sheet_connection_id'] ?? null;
+
+        // Testimonials are stored inside landing page JSON — strip from mass assignment
+        $testimonialsInput = $validated['testimonials'] ?? null;
+        unset($validated['testimonials']);
 
         // If has variations, stock/sku/price will be managed by variations
         if ($hasVariations) {
@@ -788,36 +901,13 @@ class CustomerDashboardController extends Controller
         if ($request->hasFile('images')) {
             $imagePaths = $product->images ?? [];
             foreach ($request->file('images') as $image) {
-                $imagePaths[] = $image->store('products', 'public');
+                $imagePaths[] = WebpImage::store($image, 'products');
             }
             $validated['images'] = $imagePaths;
         }
-        
-        if ($request->has('landing_sections')) {
-            $landingSections = [];
-            foreach ($request->input('landing_sections', []) as $index => $section) {
-                $sectionData = [
-                    'title_fr' => $section['title_fr'] ?? '',
-                    'description_fr' => $section['description_fr'] ?? '',
-                    'title_en' => $section['title_en'] ?? '',
-                    'description_en' => $section['description_en'] ?? '',
-                    'title_ar' => $section['title_ar'] ?? '',
-                    'description_ar' => $section['description_ar'] ?? '',
-                ];
-                
-                if ($request->hasFile("landing_sections.{$index}.image")) {
-                    $sectionData['image'] = $request->file("landing_sections.{$index}.image")->store('products/landing-sections', 'public');
-                } elseif (!empty($section['existing_image'])) {
-                    $sectionData['image'] = $section['existing_image'];
-                }
-                
-                if (!empty($sectionData['title_fr']) || !empty($sectionData['description_fr'])) {
-                    $landingSections[] = $sectionData;
-                }
-            }
-            
-            $validated['landing_page_sections'] = $landingSections;
-        }
+
+        // Landing page sections are no longer used
+        $validated['landing_page_sections'] = [];
         
         // Handle form fields configuration
         if ($request->has('form_fields')) {
@@ -918,6 +1008,7 @@ class CustomerDashboardController extends Controller
                         'min_quantity' => $promotionData['min_quantity'],
                         'max_quantity' => $promotionData['max_quantity'] ?? null,
                         'price' => $promotionData['price'],
+                        'compare_at_price' => !empty($promotionData['compare_at_price']) ? $promotionData['compare_at_price'] : null,
                         'is_active' => true,
                     ];
 
@@ -943,6 +1034,46 @@ class CustomerDashboardController extends Controller
         } else {
             // Only delete promotions if has_promotions checkbox is explicitly unchecked
             $product->promotions()->delete();
+        }
+
+        // Update reviewer names on landing page testimonials (keep each language's text/rating)
+        if (is_array($testimonialsInput)) {
+            $nameByIndex = [];
+            foreach ($testimonialsInput as $index => $testimonial) {
+                if (!is_array($testimonial)) {
+                    continue;
+                }
+                $nameByIndex[(int) $index] = trim((string) ($testimonial['name'] ?? ''));
+            }
+
+            $landingDirty = false;
+            foreach (['landing_page_ar', 'landing_page_fr', 'landing_page_en'] as $landingColumn) {
+                $landingData = $product->{$landingColumn};
+                if (!is_array($landingData) || empty($landingData['testimonials']) || !is_array($landingData['testimonials'])) {
+                    continue;
+                }
+
+                $changed = false;
+                foreach ($landingData['testimonials'] as $index => &$existing) {
+                    if (!is_array($existing) || !array_key_exists($index, $nameByIndex)) {
+                        continue;
+                    }
+                    if (($existing['name'] ?? '') !== $nameByIndex[$index]) {
+                        $existing['name'] = $nameByIndex[$index];
+                        $changed = true;
+                    }
+                }
+                unset($existing);
+
+                if ($changed) {
+                    $product->{$landingColumn} = $landingData;
+                    $landingDirty = true;
+                }
+            }
+
+            if ($landingDirty) {
+                $product->save();
+            }
         }
 
         return redirect()->route('app.products')->with('success', 'Product updated successfully!');
@@ -996,6 +1127,38 @@ class CustomerDashboardController extends Controller
             'success' => true,
             'message' => 'Landing page generation started! It will be ready in a few moments.'
         ]);
+    }
+
+    /**
+     * Generate AI titles + short descriptions for product images (used on create form).
+     */
+    public function generateImageCaptions(Request $request)
+    {
+        $validated = $request->validate([
+            'product_name' => 'required|string|max:255',
+            'category' => 'nullable|string|max:255',
+            'count' => 'required|integer|min:1|max:20',
+        ]);
+
+        try {
+            $aiService = new AiLandingPageService(auth()->user());
+            $captions = $aiService->generateImageCaptions(
+                $validated['product_name'],
+                $validated['category'] ?? 'General',
+                (int) $validated['count']
+            );
+
+            return response()->json([
+                'success' => true,
+                'captions' => $captions,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('generateImageCaptions failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 
     public function generateProductImages($productId)
@@ -1083,6 +1246,7 @@ class CustomerDashboardController extends Controller
             'page_data.en' => 'nullable|array',
             'page_data.ar' => 'nullable|array',
             'show_product_sections' => 'nullable|boolean',
+            'landing_page_background_color' => ['nullable', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
         
         // Add show_product_sections to each language's page data
@@ -1095,12 +1259,18 @@ class CustomerDashboardController extends Controller
         $pageDataEn['show_product_sections'] = $showSections;
         $pageDataAr['show_product_sections'] = $showSections;
         
-        $product->update([
+        $updatePayload = [
             'landing_page_sections' => $validated['sections'] ?? [],
             'landing_page_fr' => $pageDataFr,
             'landing_page_en' => $pageDataEn,
             'landing_page_ar' => $pageDataAr,
-        ]);
+        ];
+
+        if (!empty($validated['landing_page_background_color'])) {
+            $updatePayload['landing_page_background_color'] = strtolower($validated['landing_page_background_color']);
+        }
+
+        $product->update($updatePayload);
         
         return response()->json([
             'success' => true,
@@ -1111,10 +1281,10 @@ class CustomerDashboardController extends Controller
     public function uploadQuillImage(Request $request)
     {
         $request->validate([
-            'image' => 'required|image|max:5120'
+            'image' => 'required|image|max:10240'
         ]);
         
-        $path = $request->file('image')->store('products/descriptions', 'public');
+        $path = WebpImage::store($request->file('image'), 'products');
         $url = \Storage::url($path);
         
         return response()->json([
@@ -1135,10 +1305,10 @@ class CustomerDashboardController extends Controller
             ->findOrFail($id);
         
         $request->validate([
-            'image' => 'required|image|max:2048'
+            'image' => 'required|image|max:10240'
         ]);
         
-        $path = $request->file('image')->store('products/landing-sections', 'public');
+        $path = WebpImage::store($request->file('image'), 'products/landing-sections');
         $url = \Storage::url($path);
         
         return response()->json([
@@ -1227,7 +1397,8 @@ class CustomerDashboardController extends Controller
                 });
             })
             ->latest()
-            ->paginate(20);
+            ->paginate(20)
+            ->withQueryString();
 
         $blockedIpAddresses = $this->getBlockedIpAddresses();
         

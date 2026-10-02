@@ -8,6 +8,10 @@
         </div>
     </x-slot>
 
+    @php
+        $currencySymbol = isset($activeWorkspace) ? $activeWorkspace->getCurrencySymbol() : (config('workspace.currencies.MAD.symbol') ?? 'DHS');
+    @endphp
+
     @if(session('success'))
     <div class="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 text-green-400">
         {{ session('success') }}
@@ -59,12 +63,35 @@
     </div>
 
     @if(isset($orders) && $orders->count() > 0)
+    <!-- Bulk actions bar -->
+    <div id="bulkActionsBar" class="hidden mb-4 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <p class="text-red-300 text-sm">
+            <span id="selectedCount">0</span> commande(s) sélectionnée(s)
+        </p>
+        <button type="button" onclick="confirmBulkDelete()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition flex items-center gap-2 text-sm font-medium">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            Supprimer la sélection
+        </button>
+    </div>
+
+    <form id="bulkDeleteForm" method="POST" action="{{ route('app.orders.bulk-destroy') }}" class="hidden">
+        @csrf
+        <input type="hidden" name="from" value="orders">
+        <div id="bulkDeleteIds"></div>
+    </form>
+
     <!-- Orders Table -->
     <div class="bg-[#0f1c2e] border border-white/10 rounded-xl overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-white/10 bg-[#1a2d42]">
+                        <th class="px-4 py-3 text-left">
+                            <input type="checkbox" id="selectAllOrders" onchange="toggleSelectAll(this)"
+                                class="w-4 h-4 rounded border-white/20 bg-[#0f1c2e] text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer">
+                        </th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">ID</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Produit</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Client</th>
@@ -79,6 +106,10 @@
                 <tbody class="divide-y divide-white/5">
                     @foreach($orders as $order)
                     <tr class="hover:bg-white/5 transition">
+                        <td class="px-4 py-4 whitespace-nowrap">
+                            <input type="checkbox" class="order-checkbox w-4 h-4 rounded border-white/20 bg-[#0f1c2e] text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer"
+                                value="{{ $order->id }}" onchange="updateBulkSelection()">
+                        </td>
                         <td class="px-4 py-4 whitespace-nowrap">
                             <span class="text-white font-medium">#{{ $order->id }}</span>
                         </td>
@@ -106,7 +137,7 @@
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap">
                             <span class="text-green-400 font-semibold">
-                                {{ $order->selected_price ? number_format($order->selected_price, 2) . ' DHS' : ($order->product ? number_format($order->product->price, 2) . ' DHS' : 'N/A') }}
+                                {{ $order->selected_price ? number_format($order->selected_price, 2) . ' ' . $currencySymbol : ($order->product ? number_format($order->product->price, 2) . ' ' . $currencySymbol : 'N/A') }}
                             </span>
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap">
@@ -170,12 +201,17 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                     </svg>
                                 </a>
+                                <button type="button" onclick="confirmDeleteOrder({{ $order->id }})" class="p-2 text-gray-400 hover:text-red-400 transition" title="Supprimer">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
                             </div>
                         </td>
                     </tr>
                     <!-- Expandable Details Row -->
                     <tr id="order-details-{{ $order->id }}" class="hidden bg-[#1a2d42]/50">
-                        <td colspan="9" class="px-4 py-4">
+                        <td colspan="10" class="px-4 py-4">
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <!-- Customer Info -->
                                 <div class="bg-[#0f1c2e] rounded-lg p-4">
@@ -228,7 +264,7 @@
                                         </div>
                                         <div class="flex justify-between">
                                             <dt class="text-gray-400">Prix sélectionné:</dt>
-                                            <dd class="text-green-400 font-semibold">{{ $order->selected_price ? number_format($order->selected_price, 2) . ' DHS' : 'N/A' }}</dd>
+                                            <dd class="text-green-400 font-semibold">{{ $order->selected_price ? number_format($order->selected_price, 2) . ' ' . $currencySymbol : 'N/A' }}</dd>
                                         </div>
                                         @if($order->promotion)
                                         <div class="flex justify-between">
@@ -237,7 +273,7 @@
                                         </div>
                                         <div class="flex justify-between">
                                             <dt class="text-gray-400">Prix promotion:</dt>
-                                            <dd class="text-yellow-400">{{ $order->promotion->price ? number_format($order->promotion->price, 2) . ' DHS' : 'N/A' }}</dd>
+                                            <dd class="text-yellow-400">{{ $order->promotion->price ? number_format($order->promotion->price, 2) . ' ' . $currencySymbol : 'N/A' }}</dd>
                                         </div>
                                         @endif
                                         @if($order->variation)
@@ -259,7 +295,7 @@
                                         </div>
                                         <div class="flex justify-between">
                                             <dt class="text-gray-400">Prix variante:</dt>
-                                            <dd class="text-blue-400">{{ $order->variation->price ? number_format($order->variation->price, 2) . ' DHS' : 'N/A' }}</dd>
+                                            <dd class="text-blue-400">{{ $order->variation->price ? number_format($order->variation->price, 2) . ' ' . $currencySymbol : 'N/A' }}</dd>
                                         </div>
                                         @endif
                                     </dl>
@@ -315,11 +351,117 @@
         
         <!-- Pagination -->
         @if($orders->hasPages())
+        <div class="px-4 py-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p class="text-sm text-gray-400">
+                Affichage de {{ $orders->firstItem() }} à {{ $orders->lastItem() }} sur {{ $orders->total() }} commandes
+            </p>
+            <div class="orders-pagination">
+                {{ $orders->links() }}
+            </div>
+        </div>
+        @else
         <div class="px-4 py-3 border-t border-white/10">
-            {{ $orders->links() }}
+            <p class="text-sm text-gray-400">
+                {{ $orders->total() }} commande(s)
+            </p>
         </div>
         @endif
     </div>
+
+    <!-- Single Delete Confirmation Modal -->
+    <div id="deleteModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
+        <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white">Supprimer la commande</h3>
+                    <p class="text-sm text-gray-400">Cette action est irréversible</p>
+                </div>
+            </div>
+            <p class="text-gray-300 mb-6">Êtes-vous sûr de vouloir supprimer la commande <span id="deleteOrderLabel" class="font-semibold text-white"></span> ?</p>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
+                    Annuler
+                </button>
+                <form id="deleteForm" method="POST" class="inline">
+                    @csrf
+                    @method('DELETE')
+                    <input type="hidden" name="from" value="orders">
+                    <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition">
+                        Supprimer
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Delete Confirmation Modal -->
+    <div id="bulkDeleteModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
+        <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white">Supprimer les commandes</h3>
+                    <p class="text-sm text-gray-400">Cette action est irréversible</p>
+                </div>
+            </div>
+            <p class="text-gray-300 mb-6">Êtes-vous sûr de vouloir supprimer <span id="bulkDeleteCount" class="font-semibold text-white">0</span> commande(s) sélectionnée(s) ?</p>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeBulkDeleteModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
+                    Annuler
+                </button>
+                <button type="button" onclick="submitBulkDelete()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition">
+                    Supprimer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .orders-pagination nav {
+            display: flex;
+            justify-content: center;
+        }
+        .orders-pagination nav > div:first-child {
+            display: none;
+        }
+        .orders-pagination span, .orders-pagination a {
+            display: inline-flex;
+            align-items: center;
+        }
+        .orders-pagination .relative > span,
+        .orders-pagination .relative > a {
+            margin: 0 2px;
+        }
+        .orders-pagination span[aria-disabled="true"] span,
+        .orders-pagination span[aria-current="page"] span {
+            background-color: #1a2d42 !important;
+            border-color: rgba(255,255,255,0.1) !important;
+            color: #9ca3af !important;
+        }
+        .orders-pagination span[aria-current="page"] span {
+            background-color: #0891b2 !important;
+            border-color: #0891b2 !important;
+            color: #fff !important;
+        }
+        .orders-pagination a span {
+            background-color: #1a2d42 !important;
+            border-color: rgba(255,255,255,0.1) !important;
+            color: #e5e7eb !important;
+        }
+        .orders-pagination a:hover span {
+            background-color: #243b55 !important;
+            color: #fff !important;
+        }
+    </style>
     @else
     <!-- Empty State -->
     <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-16 text-center">
@@ -340,5 +482,92 @@
                 detailsRow.classList.toggle('hidden');
             }
         }
+
+        function toggleSelectAll(master) {
+            document.querySelectorAll('.order-checkbox').forEach(cb => {
+                cb.checked = master.checked;
+            });
+            updateBulkSelection();
+        }
+
+        function updateBulkSelection() {
+            const checkboxes = document.querySelectorAll('.order-checkbox');
+            const checked = document.querySelectorAll('.order-checkbox:checked');
+            const bar = document.getElementById('bulkActionsBar');
+            const countEl = document.getElementById('selectedCount');
+            const selectAll = document.getElementById('selectAllOrders');
+
+            if (countEl) countEl.textContent = checked.length;
+
+            if (bar) {
+                if (checked.length > 0) {
+                    bar.classList.remove('hidden');
+                } else {
+                    bar.classList.add('hidden');
+                }
+            }
+
+            if (selectAll && checkboxes.length) {
+                selectAll.checked = checked.length === checkboxes.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+            }
+        }
+
+        function confirmDeleteOrder(orderId) {
+            const modal = document.getElementById('deleteModal');
+            const form = document.getElementById('deleteForm');
+            const label = document.getElementById('deleteOrderLabel');
+
+            form.action = `/app/orders/${orderId}`;
+            label.textContent = '#' + orderId;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeDeleteModal() {
+            const modal = document.getElementById('deleteModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmBulkDelete() {
+            const checked = document.querySelectorAll('.order-checkbox:checked');
+            if (!checked.length) return;
+
+            document.getElementById('bulkDeleteCount').textContent = checked.length;
+            const modal = document.getElementById('bulkDeleteModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeBulkDeleteModal() {
+            const modal = document.getElementById('bulkDeleteModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function submitBulkDelete() {
+            const checked = document.querySelectorAll('.order-checkbox:checked');
+            const container = document.getElementById('bulkDeleteIds');
+            container.innerHTML = '';
+
+            checked.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = cb.value;
+                container.appendChild(input);
+            });
+
+            document.getElementById('bulkDeleteForm').submit();
+        }
+
+        document.getElementById('deleteModal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeDeleteModal();
+        });
+        document.getElementById('bulkDeleteModal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeBulkDeleteModal();
+        });
     </script>
 </x-customer-layout>

@@ -149,6 +149,12 @@
                                                     </svg>
                                                     {{ $workspace->stores_count }} {{ Str::plural('Store', $workspace->stores_count) }}
                                                 </span>
+                                                <span class="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 rounded">
+                                                    {{ $workspace->getLanguageLabel() }}
+                                                </span>
+                                                <span class="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 rounded">
+                                                    {{ $workspace->getCurrencyCode() }} ({{ $workspace->getCurrencySymbol() }})
+                                                </span>
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">

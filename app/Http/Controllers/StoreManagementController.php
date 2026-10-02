@@ -6,6 +6,7 @@ use App\Models\Store;
 use App\Support\StoreDomain;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\Rule;
 
 class StoreManagementController extends Controller
 {
@@ -20,6 +21,7 @@ class StoreManagementController extends Controller
             ->when($activeWorkspaceId, function ($query, $workspaceId) {
                 return $query->where('workspace_id', $workspaceId);
             })
+            ->with('serviceIntegration')
             ->withCount('products', 'categories')
             ->latest()
             ->get();
@@ -55,8 +57,9 @@ class StoreManagementController extends Controller
                 'platform_domain' => StoreDomain::platformDomain(),
                 'server_ip' => StoreDomain::serverIp(),
             ];
+            $serviceIntegrations = $this->workspaceServiceIntegrations($activeWorkspaceId);
 
-            return view('stores.list', compact('stores', 'stats', 'currentStoreId', 'activeWorkspace', 'domainConfig'));
+            return view('stores.list', compact('stores', 'stats', 'currentStoreId', 'activeWorkspace', 'domainConfig', 'serviceIntegrations'));
         }
         
         return view('stores.overview', compact('stores', 'stats', 'currentStoreId', 'activeWorkspace'));
@@ -81,7 +84,9 @@ class StoreManagementController extends Controller
     
     public function create()
     {
-        return view('stores.create');
+        $serviceIntegrations = $this->workspaceServiceIntegrations();
+
+        return view('stores.create', compact('serviceIntegrations'));
     }
     
     public function store(Request $request)
@@ -92,10 +97,18 @@ class StoreManagementController extends Controller
             'domain' => 'nullable|string|max:255|unique:stores,domain',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
+            'service_integration_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('workspace_service_integrations', 'id')
+                    ->where('workspace_id', session('active_workspace_id'))
+                    ->where('user_id', auth()->id()),
+            ],
         ]);
         
         $validated['user_id'] = auth()->id();
         $validated['workspace_id'] = session('active_workspace_id');
+        $validated['service_integration_id'] = $validated['service_integration_id'] ?? null;
         
         if (!isset($validated['is_active'])) {
             $validated['is_active'] = true;
@@ -111,8 +124,10 @@ class StoreManagementController extends Controller
     public function edit(Store $store)
     {
         $this->authorize('update', $store);
+
+        $serviceIntegrations = $this->workspaceServiceIntegrations($store->workspace_id);
         
-        return view('stores.edit', compact('store'));
+        return view('stores.edit', compact('store', 'serviceIntegrations'));
     }
     
     public function update(Request $request, Store $store)
@@ -125,7 +140,16 @@ class StoreManagementController extends Controller
             'domain' => 'nullable|string|max:255|unique:stores,domain,' . $store->id,
             'description' => 'nullable|string',
             'is_active' => 'boolean',
+            'service_integration_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('workspace_service_integrations', 'id')
+                    ->where('workspace_id', $store->workspace_id)
+                    ->where('user_id', auth()->id()),
+            ],
         ]);
+
+        $validated['service_integration_id'] = $validated['service_integration_id'] ?? null;
         
         $store->update($validated);
         
@@ -171,6 +195,32 @@ class StoreManagementController extends Controller
         } else {
             return redirect()->route('stores.dashboard')->with('success', 'Custom domain removed. Store is accessible via subdomain.');
         }
+    }
+
+    public function assignService(Request $request, Store $store)
+    {
+        $this->authorize('update', $store);
+
+        $validated = $request->validate([
+            'service_integration_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('workspace_service_integrations', 'id')
+                    ->where('workspace_id', $store->workspace_id)
+                    ->where('user_id', auth()->id()),
+            ],
+        ]);
+
+        $serviceId = $validated['service_integration_id'] ?? null;
+        $store->update(['service_integration_id' => $serviceId]);
+
+        $message = $serviceId
+            ? '"' . $store->name . '" is now affected to ' . $store->fresh()->serviceIntegration->name . '.'
+            : 'Service assignment removed from "' . $store->name . '".';
+
+        return redirect()
+            ->route('stores.dashboard', ['view' => 'list'])
+            ->with('success', $message);
     }
     
     public function duplicate(Store $store)
@@ -233,5 +283,20 @@ class StoreManagementController extends Controller
         }
         
         return redirect()->route('stores.dashboard')->with('success', 'Store "' . $store->name . '" duplicated successfully with all ' . $products->count() . ' products!');
+    }
+
+    protected function workspaceServiceIntegrations(?int $workspaceId = null)
+    {
+        $workspaceId = $workspaceId ?: session('active_workspace_id');
+
+        if (!$workspaceId) {
+            return collect();
+        }
+
+        return \App\Models\WorkspaceServiceIntegration::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('user_id', auth()->id())
+            ->orderBy('name')
+            ->get();
     }
 }

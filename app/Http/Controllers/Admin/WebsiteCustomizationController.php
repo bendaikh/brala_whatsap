@@ -146,15 +146,26 @@ class WebsiteCustomizationController extends Controller
             ->limit(8)
             ->get();
         
-        // Create a fake store object for preview
-        $store = new \stdClass();
-        $store->subdomain = 'preview';
-        $store->facebook_pixel_enabled = false;
-        $store->facebook_pixel_id = null;
-        $store->tiktok_pixel_enabled = false;
-        $store->tiktok_pixel_id = null;
-        
-        return view('welcome', compact('products', 'categories', 'featuredProducts', 'settings', 'store'))
+        // Use the real store so workspace language/currency apply in preview
+        $store = $storeId
+            ? \App\Models\Store::with('workspace')->find($storeId)
+            : null;
+
+        if (!$store) {
+            $store = new \stdClass();
+            $store->subdomain = 'preview';
+            $store->facebook_pixel_enabled = false;
+            $store->facebook_pixel_id = null;
+            $store->tiktok_pixel_enabled = false;
+            $store->tiktok_pixel_id = null;
+            $store->workspace = null;
+        }
+
+        $workspace = $store->workspace ?? (session('active_workspace_id')
+            ? \App\Models\Workspace::find(session('active_workspace_id'))
+            : null);
+
+        return view('welcome', compact('products', 'categories', 'featuredProducts', 'settings', 'store', 'workspace'))
             ->with('isPreview', true);
     }
 }

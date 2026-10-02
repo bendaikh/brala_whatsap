@@ -97,11 +97,31 @@ Route::middleware(['auth', 'require.workspace'])->prefix('stores')->name('stores
     Route::get('/', [\App\Http\Controllers\StoreManagementController::class, 'dashboard'])->name('dashboard');
     Route::get('/create', [\App\Http\Controllers\StoreManagementController::class, 'create'])->name('create');
     Route::post('/', [\App\Http\Controllers\StoreManagementController::class, 'store'])->name('store');
+
+    // Services Integration (workspace-level, before {store} routes)
+    Route::get('/services-integration', [\App\Http\Controllers\ServicesIntegrationController::class, 'index'])->name('services-integration');
+    Route::post('/services-integration', [\App\Http\Controllers\ServicesIntegrationController::class, 'store'])->name('services-integration.store');
+    Route::get('/services-integration/{integration}/edit', [\App\Http\Controllers\ServicesIntegrationController::class, 'edit'])->name('services-integration.edit');
+    Route::put('/services-integration/{integration}', [\App\Http\Controllers\ServicesIntegrationController::class, 'update'])->name('services-integration.update');
+    Route::delete('/services-integration/{integration}', [\App\Http\Controllers\ServicesIntegrationController::class, 'destroy'])->name('services-integration.destroy');
+    Route::post('/services-integration/{integration}/test', [\App\Http\Controllers\ServicesIntegrationController::class, 'test'])->name('services-integration.test');
+    Route::post('/services-integration/{integration}/assign-store', [\App\Http\Controllers\ServicesIntegrationController::class, 'assignStore'])->name('services-integration.assign-store');
+    Route::post('/services-integration/{integration}/unassign-store', [\App\Http\Controllers\ServicesIntegrationController::class, 'unassignStore'])->name('services-integration.unassign-store');
+
+    // Google Sheets (workspace-level)
+    Route::get('/google-sheets', [\App\Http\Controllers\GoogleSheetController::class, 'index'])->name('google-sheets');
+    Route::post('/google-sheets', [\App\Http\Controllers\GoogleSheetController::class, 'store'])->name('google-sheets.store');
+    Route::get('/google-sheets/{connection}/edit', [\App\Http\Controllers\GoogleSheetController::class, 'edit'])->name('google-sheets.edit');
+    Route::put('/google-sheets/{connection}', [\App\Http\Controllers\GoogleSheetController::class, 'update'])->name('google-sheets.update');
+    Route::delete('/google-sheets/{connection}', [\App\Http\Controllers\GoogleSheetController::class, 'destroy'])->name('google-sheets.destroy');
+    Route::post('/google-sheets/{connection}/test', [\App\Http\Controllers\GoogleSheetController::class, 'test'])->name('google-sheets.test');
+
     Route::get('/{store}/edit', [\App\Http\Controllers\StoreManagementController::class, 'edit'])->name('edit');
     Route::put('/{store}', [\App\Http\Controllers\StoreManagementController::class, 'update'])->name('update');
     Route::delete('/{store}', [\App\Http\Controllers\StoreManagementController::class, 'destroy'])->name('destroy');
     Route::post('/{store}/switch', [\App\Http\Controllers\StoreManagementController::class, 'switchStore'])->name('switch');
     Route::put('/{store}/domain', [\App\Http\Controllers\StoreManagementController::class, 'updateDomain'])->name('update-domain');
+    Route::post('/{store}/assign-service', [\App\Http\Controllers\StoreManagementController::class, 'assignService'])->name('assign-service');
     Route::post('/{store}/duplicate', [\App\Http\Controllers\StoreManagementController::class, 'duplicate'])->name('duplicate');
 });
 
@@ -112,12 +132,15 @@ Route::middleware(['auth', 'require.workspace', 'require.store'])->prefix('app')
     Route::get('/conversations', [CustomerDashboardController::class, 'conversations'])->name('conversations');
     Route::get('/conversations/{id}', [CustomerDashboardController::class, 'conversationDetail'])->name('conversation.detail');
     Route::get('/orders', [CustomerDashboardController::class, 'orders'])->name('orders');
+    Route::post('/orders/bulk-delete', [CustomerDashboardController::class, 'bulkDestroyOrders'])->name('orders.bulk-destroy');
     Route::get('/orders/{lead}/edit', [CustomerDashboardController::class, 'editOrder'])->name('orders.edit');
     Route::put('/orders/{lead}', [CustomerDashboardController::class, 'updateOrder'])->name('orders.update');
+    Route::delete('/orders/{lead}', [CustomerDashboardController::class, 'destroyOrder'])->name('orders.destroy');
     Route::get('/products', [CustomerDashboardController::class, 'products'])->name('products');
     Route::get('/products/select-theme', [CustomerDashboardController::class, 'productsSelectTheme'])->name('products.select-theme');
     Route::get('/products/create', [CustomerDashboardController::class, 'productsCreate'])->name('products.create');
     Route::post('/products', [CustomerDashboardController::class, 'productsStore'])->name('products.store');
+    Route::post('/products/generate-image-captions', [CustomerDashboardController::class, 'generateImageCaptions'])->name('products.generate-image-captions');
     Route::get('/products/{id}/edit', [CustomerDashboardController::class, 'productsEdit'])->name('products.edit');
     Route::put('/products/{id}', [CustomerDashboardController::class, 'productsUpdate'])->name('products.update');
     Route::delete('/products/{id}', [CustomerDashboardController::class, 'productsDestroy'])->name('products.destroy');

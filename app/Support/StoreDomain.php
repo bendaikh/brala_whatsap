@@ -109,6 +109,10 @@ class StoreDomain
             return url('/');
         }
 
+        if ($store->domain) {
+            return self::storeHomeUrl($store);
+        }
+
         return route('store.home', $store->subdomain);
     }
 

@@ -102,11 +102,16 @@ class ProductController extends Controller
             ->limit(8)
             ->get();
 
-        return view('welcome', compact('products', 'categories', 'featuredProducts', 'settings', 'store'));
+        $store->loadMissing('workspace');
+        $workspace = $store->workspace;
+
+        return view('welcome', compact('products', 'categories', 'featuredProducts', 'settings', 'store', 'workspace'));
     }
 
     private function renderProductShow(Store $store, string $slug)
     {
+        $store->loadMissing('workspace');
+
         $product = Product::with(['activeVariations', 'activePromotions'])
             ->where('slug', $slug)
             ->where('is_active', true)
@@ -121,12 +126,13 @@ class ProductController extends Controller
             ->get();
 
         $settings = \App\Models\WebsiteSettings::getSettings($store->user_id, $store->id);
+        $workspace = $store->workspace;
 
         if ($product->landing_page_fr || $product->landing_page_en || $product->landing_page_ar) {
-            return view('product-landing', compact('product', 'relatedProducts', 'store', 'settings'));
+            return view('product-landing', compact('product', 'relatedProducts', 'store', 'settings', 'workspace'));
         }
 
-        return view('product-detail', compact('product', 'relatedProducts', 'store', 'settings'));
+        return view('product-detail', compact('product', 'relatedProducts', 'store', 'settings', 'workspace'));
     }
 
     private function processLeadSubmission(Request $request, Store $store, string $slug)
@@ -282,6 +288,7 @@ class ProductController extends Controller
             ]);
 
             \App\Jobs\PushOrderToExternalApi::dispatch($lead);
+            \App\Jobs\PushOrderToGoogleSheet::dispatch($lead);
 
             return $this->redirectAfterLead($lead);
         } finally {

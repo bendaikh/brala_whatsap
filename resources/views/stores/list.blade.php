@@ -137,6 +137,11 @@
                                                         Currently Managing
                                                     </span>
                                                 @endif
+                                                @if($store->serviceIntegration)
+                                                    <span class="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-100 rounded" title="Affected service">
+                                                        {{ $store->serviceIntegration->name }}
+                                                    </span>
+                                                @endif
                                                 @if($store->is_active)
                                                     <span class="px-2 py-1 text-xs font-semibold text-green-700 bg-green-100 rounded">
                                                         Active
@@ -175,6 +180,15 @@
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onclick="openServiceModal({{ $store->id }}, @js($store->name), {{ $store->service_integration_id ? (int) $store->service_integration_id : 'null' }})"
+                                                class="p-2 {{ $store->serviceIntegration ? 'bg-teal-100 text-teal-700 hover:bg-teal-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200' }} rounded-lg transition"
+                                                title="{{ $store->serviceIntegration ? 'Change affected service ('.$store->serviceIntegration->name.')' : 'Affect store to a service' }}">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                                </svg>
+                                            </button>
                                             <button onclick="openDomainModal({{ $store->id }}, '{{ $store->domain }}', '{{ $store->subdomain }}')" class="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 hover:text-indigo-800 transition" title="{{ $store->domain ? 'Domain Setup' : 'Add Domain' }}">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
@@ -364,9 +378,86 @@
         </div>
     </div>
 
+    <!-- Assign Service Modal -->
+    <div id="serviceModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-lg bg-white mb-10">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Affect to Service</h3>
+                    <p class="text-sm text-gray-500 mt-0.5" id="serviceModalStoreName"></p>
+                </div>
+                <button type="button" onclick="closeServiceModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="serviceForm" method="POST" action="">
+                @csrf
+
+                <div class="space-y-4">
+                    <div>
+                        <label for="serviceSelect" class="block text-sm font-medium text-gray-700 mb-2">Service company</label>
+                        <select name="service_integration_id" id="serviceSelect"
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900">
+                            <option value="">No service assigned</option>
+                            @forelse(($serviceIntegrations ?? collect()) as $integration)
+                                <option value="{{ $integration->id }}">
+                                    {{ $integration->name }} ({{ $integration->type_label }}){{ $integration->is_enabled ? '' : ' — disabled' }}
+                                </option>
+                            @empty
+                            @endforelse
+                        </select>
+                        @if(($serviceIntegrations ?? collect())->isEmpty())
+                            <p class="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                No services in this workspace yet.
+                                <a href="{{ route('stores.services-integration') }}" class="font-medium text-emerald-700 hover:underline">Add a service company</a>
+                                first.
+                            </p>
+                        @else
+                            <p class="mt-2 text-xs text-gray-500">Orders from this store will be pushed to the selected service.</p>
+                        @endif
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                        <button type="button" onclick="closeServiceModal()" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition {{ ($serviceIntegrations ?? collect())->isEmpty() ? 'opacity-50 cursor-not-allowed' : '' }}" {{ ($serviceIntegrations ?? collect())->isEmpty() ? 'disabled' : '' }}>
+                            Save Assignment
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const platformDomain = @json($platformDomain);
         const serverIp = @json($serverIp);
+
+        function openServiceModal(storeId, storeName, currentServiceId) {
+            const form = document.getElementById('serviceForm');
+            const select = document.getElementById('serviceSelect');
+            const nameEl = document.getElementById('serviceModalStoreName');
+
+            form.action = '/stores/' + storeId + '/assign-service';
+            nameEl.textContent = storeName;
+            select.value = currentServiceId ? String(currentServiceId) : '';
+
+            document.getElementById('serviceModal').classList.remove('hidden');
+        }
+
+        function closeServiceModal() {
+            document.getElementById('serviceModal').classList.add('hidden');
+        }
+
+        document.getElementById('serviceModal').addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeServiceModal();
+            }
+        });
 
         function openDomainModal(storeId, currentDomain, subdomain) {
             const form = document.getElementById('domainForm');

@@ -1,6 +1,10 @@
 @extends('layouts.customer')
 
 @section('content')
+    @php
+        $currencyCode = isset($activeWorkspace) ? $activeWorkspace->getCurrencyCode() : 'MAD';
+        $currencySymbol = isset($activeWorkspace) ? $activeWorkspace->getCurrencySymbol() : 'DHS';
+    @endphp
     <div class="mb-6">
         <div class="flex justify-between items-center">
             <div>
@@ -126,16 +130,17 @@
                     <div>
                         <label for="slug" class="block text-sm font-medium text-gray-300 mb-2">
                             URL Slug
-                            <span class="text-xs text-gray-500 ml-2">(auto-generated from name, you can modify it)</span>
+                            <span class="text-xs text-gray-500 ml-2">(auto-generated from name)</span>
                         </label>
                         <input 
                             type="text" 
                             id="slug" 
                             name="slug" 
                             value="{{ old('slug') }}"
-                            class="w-full px-4 py-3 bg-[#0a1628] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            readonly
+                            tabindex="-1"
+                            class="w-full px-4 py-3 bg-[#0a1628]/80 border border-white/10 rounded-lg text-gray-400 placeholder-gray-500 cursor-not-allowed focus:outline-none"
                             placeholder="product-url-slug"
-                            oninput="updateLandingPageUrl()"
                         />
                         @error('slug')
                             <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
@@ -169,11 +174,63 @@
                         @endif
                     </div>
 
+                    <!-- Product Images (before description) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Product Images</label>
+                        <p class="text-xs text-gray-500 mb-3">Upload multiple images. <strong class="text-gray-300">Image 1</strong> is the main landing-page image. <strong class="text-gray-300">Images 2+</strong> get AI titles/descriptions and go into the Description below.</p>
+                        <div class="border-2 border-dashed border-white/10 rounded-lg p-8 text-center hover:border-emerald-500/50 transition">
+                            <input 
+                                type="file" 
+                                id="images" 
+                                name="images[]" 
+                                multiple
+                                accept="image/*"
+                                class="hidden"
+                                onchange="previewImages(event)"
+                            />
+                            <label for="images" class="cursor-pointer">
+                                <svg class="w-12 h-12 text-gray-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                <p class="text-gray-400 mb-1">Click to upload images</p>
+                                <p class="text-xs text-gray-500">PNG, JPG, GIF up to 10MB each</p>
+                            </label>
+                        </div>
+                        <div id="imagePreview" class="space-y-4 mt-4"></div>
+                        <div id="preuploadedImagesContainer"></div>
+                        <input type="hidden" id="mainImageIndex" name="main_image_index" value="0">
+                        @error('images')
+                            <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
                     <!-- Description -->
                     <div>
                         <label for="description" class="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                        <p class="text-xs text-gray-500 mb-2">Auto-filled from images 2+ only (main image stays at the top of the landing page). You can still edit it.</p>
                         <!-- Quill Rich Text Editor -->
-                        <div id="description-editor" class="bg-white rounded-lg" style="min-height: 200px;"></div>
+                        <div id="descriptionEditorWrap" class="relative rounded-lg">
+                            <div id="description-editor" class="bg-white rounded-lg" style="min-height: 200px;"></div>
+                            <div id="descriptionFillingOverlay" class="hidden absolute inset-0 z-10 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3 bg-[#0a1628]/90 backdrop-blur-[2px] border border-emerald-500/40">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-5 h-5 text-emerald-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                    <p id="descriptionFillingMessage" class="text-sm font-medium text-emerald-300">Filling description…</p>
+                                </div>
+                                <div class="w-full max-w-sm px-6 space-y-2" aria-hidden="true">
+                                    <div class="h-2.5 rounded bg-white/10 overflow-hidden">
+                                        <div id="descriptionFillingBar" class="h-full w-1/3 rounded bg-emerald-500/70 animate-pulse" style="animation: descriptionFillSlide 1.4s ease-in-out infinite;"></div>
+                                    </div>
+                                    <div class="h-2 rounded bg-white/5 w-4/5 mx-auto overflow-hidden">
+                                        <div class="h-full w-2/5 rounded bg-white/20 animate-pulse"></div>
+                                    </div>
+                                    <div class="h-2 rounded bg-white/5 w-3/5 mx-auto overflow-hidden">
+                                        <div class="h-full w-1/2 rounded bg-white/15 animate-pulse"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <textarea 
                             id="description" 
                             name="description" 
@@ -183,11 +240,22 @@
                             <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
                         @enderror
                     </div>
+                    <style>
+                        @keyframes descriptionFillSlide {
+                            0% { transform: translateX(-120%); }
+                            50% { transform: translateX(180%); }
+                            100% { transform: translateX(-120%); }
+                        }
+                        #descriptionEditorWrap.is-filling #description-editor {
+                            pointer-events: none;
+                            opacity: 0.55;
+                        }
+                    </style>
 
                     <!-- Price and Compare Price -->
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label for="price" class="block text-sm font-medium text-gray-300 mb-2">Price (DHS) *</label>
+                            <label for="price" class="block text-sm font-medium text-gray-300 mb-2">Price ({{ $currencyCode }}) *</label>
                             <input 
                                 type="number" 
                                 id="price" 
@@ -205,7 +273,7 @@
                         </div>
 
                         <div>
-                            <label for="compare_at_price" class="block text-sm font-medium text-gray-300 mb-2">Compare at Price (DHS)</label>
+                            <label for="compare_at_price" class="block text-sm font-medium text-gray-300 mb-2">Compare at Price ({{ $currencyCode }})</label>
                             <input 
                                 type="number" 
                                 id="compare_at_price" 
@@ -274,6 +342,34 @@
                                 <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
                             @enderror
                         </div>
+                    </div>
+
+                    <!-- Google Sheet (optional) -->
+                    <div class="border-t border-white/10 pt-4">
+                        <label for="google_sheet_connection_id" class="block text-sm font-medium text-gray-300 mb-2">
+                            Google Sheet <span class="text-gray-500 font-normal">(optional)</span>
+                        </label>
+                        <select
+                            id="google_sheet_connection_id"
+                            name="google_sheet_connection_id"
+                            class="w-full px-4 py-3 bg-[#0a1628] border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        >
+                            <option value="">No Google Sheet</option>
+                            @foreach(($googleSheets ?? collect()) as $sheet)
+                                <option value="{{ $sheet->id }}" @selected((string) old('google_sheet_connection_id') === (string) $sheet->id)>
+                                    {{ $sheet->name }}{{ $sheet->is_enabled ? '' : ' (disabled)' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">
+                            If selected, every order for this product will be added to that sheet.
+                            @if(($googleSheets ?? collect())->isEmpty())
+                                Connect a sheet first in Manage Stores → Google Sheets.
+                            @endif
+                        </p>
+                        @error('google_sheet_connection_id')
+                            <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <!-- Product Variations Toggle -->
@@ -372,7 +468,7 @@
                                 <p class="font-semibold mb-1">How it works:</p>
                                 <ul class="list-disc list-inside space-y-1 text-xs">
                                     <li>Set different prices based on quantity purchased</li>
-                                    <li>Example: Buy 1 for 100 DHS, Buy 2 for 90 DHS each, Buy 3+ for 80 DHS each</li>
+                                    <li>Example: Buy 1 for 100 {{ $currencyCode }}, Buy 2 for 90 {{ $currencyCode }} each, Buy 3+ for 80 {{ $currencyCode }} each</li>
                                     <li>Promotions apply automatically at checkout</li>
                                 </ul>
                             </div>
@@ -406,59 +502,7 @@
                         </svg>
                         <p class="text-yellow-300 font-semibold mb-1">⚠️ No pricing tiers added yet!</p>
                         <p class="text-gray-400 text-sm">Click <strong class="text-yellow-400">"Add Tier"</strong> above to create quantity-based pricing</p>
-                        <p class="text-xs mt-2 text-gray-500">Example: Buy 2+ items → Pay 90 DHS each instead of 100 DHS</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Product Images Card -->
-            <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6">
-                <h3 class="text-xl font-bold text-white mb-6">Product Images</h3>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Upload Images (Multiple)</label>
-                    <p class="text-xs text-gray-500 mb-3">First image will be set as main image by default. You can change it later.</p>
-                    <div class="border-2 border-dashed border-white/10 rounded-lg p-8 text-center hover:border-emerald-500/50 transition">
-                        <input 
-                            type="file" 
-                            id="images" 
-                            name="images[]" 
-                            multiple
-                            accept="image/*"
-                            class="hidden"
-                            onchange="previewImages(event)"
-                        />
-                        <label for="images" class="cursor-pointer">
-                            <svg class="w-12 h-12 text-gray-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                            </svg>
-                            <p class="text-gray-400 mb-1">Click to upload images</p>
-                            <p class="text-xs text-gray-500">PNG, JPG, GIF up to 2MB each</p>
-                        </label>
-                    </div>
-                    <div id="imagePreview" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4"></div>
-                    <input type="hidden" id="mainImageIndex" name="main_image_index" value="0">
-                    @error('images')
-                        <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
-                    @enderror
-                </div>
-            </div>
-
-            <!-- Landing Page Sections (Image with Description) -->
-            <div class="bg-[#0f1c2e] border border-white/10 rounded-xl p-6">
-                <div class="mb-6">
-                    <div>
-                        <h3 class="text-xl font-bold text-white">Landing Page Sections</h3>
-                        <p class="text-xs text-gray-500 mt-1">Auto-created from uploaded images. AI will generate titles & descriptions when you enable AI Landing Page Generation.</p>
-                    </div>
-                </div>
-                
-                <div id="landingSectionsContainer" class="space-y-4">
-                    <div class="text-center py-8 text-gray-500 text-sm" id="noSectionsMessage">
-                        <svg class="w-12 h-12 text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                        </svg>
-                        Upload images above to auto-create sections
+                        <p class="text-xs mt-2 text-gray-500">Example: Buy 2+ items → Pay 90 {{ $currencyCode }} each instead of 100 {{ $currencyCode }}</p>
                     </div>
                 </div>
             </div>
@@ -484,6 +528,10 @@
                             <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:to-blue-600"></div>
                         </label>
                     </div>
+
+                    @include('customer.partials.landing-background-color-picker', [
+                        'hint' => 'Default background for the landing page. If AI Landing Page is on, AI may pick a better color for this product; you can change it later.',
+                    ])
 
                     <!-- AI Product Images Generation Toggle -->
                     <div class="flex items-center justify-between pb-4 border-b border-white/10">
@@ -540,18 +588,18 @@
                 </div>
             </div>
 
-            @include('customer.partials.landing-form-fields-builder')
+            @include('customer.partials.landing-form-fields-builder', ['workspaceLang' => $workspaceLang ?? ($store->workspace?->getLanguage() ?? 'ar')])
 
             <!-- Submit Buttons -->
             <div class="flex justify-end gap-4">
                 <a href="{{ route('app.products') }}" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition">
                     Cancel
                 </a>
-                <button type="submit" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition flex items-center gap-2">
+                <button type="submit" id="createProductBtn" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-500">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
-                    Create Product
+                    <span id="createProductBtnLabel">Create Product</span>
                 </button>
             </div>
         </form>
@@ -562,6 +610,50 @@
         let uploadedFiles = [];
         let variationCounter = 0;
         let promotionCounter = 0;
+        let productImageItems = []; // { id, file, previewUrl, uploadedUrl, path, title, description, status }
+        let descriptionQuill = null;
+        let isSyncingDescriptionFromImages = false;
+        let isFillingDescription = false;
+        let isSubmittingProduct = false;
+        const uploadImageUrl = '{{ route("app.quill.upload-image") }}';
+        const generateCaptionsUrl = '{{ route("app.products.generate-image-captions") }}';
+        const storeProductUrl = '{{ route("app.products.store") }}';
+        const createBtnDefaultLabel = 'Create Product';
+        const createBtnFillingLabel = 'Waiting for description…';
+
+        function setDescriptionFillingUI(active, message) {
+            isFillingDescription = !!active;
+            const wrap = document.getElementById('descriptionEditorWrap');
+            const overlay = document.getElementById('descriptionFillingOverlay');
+            const msgEl = document.getElementById('descriptionFillingMessage');
+
+            if (wrap) {
+                wrap.classList.toggle('is-filling', isFillingDescription);
+            }
+            if (overlay) {
+                overlay.classList.toggle('hidden', !isFillingDescription);
+            }
+            if (msgEl && message) {
+                msgEl.textContent = message;
+            }
+            updateCreateButtonState();
+        }
+
+        function updateCreateButtonState() {
+            const submitBtn = document.getElementById('createProductBtn');
+            const labelEl = document.getElementById('createProductBtnLabel');
+            if (!submitBtn || isSubmittingProduct) return;
+
+            const imagesBusy = productImageItems.some(i => i.status === 'uploading' || i.status === 'generating');
+            const busy = isFillingDescription || imagesBusy;
+
+            submitBtn.disabled = busy;
+            if (labelEl) {
+                labelEl.textContent = busy ? createBtnFillingLabel : createBtnDefaultLabel;
+            }
+        }
+        const productsIndexUrl = '{{ route("app.products") }}';
+        const csrfToken = '{{ csrf_token() }}';
 
         // Slug generation and URL preview functions
         function slugify(text) {
@@ -575,20 +667,15 @@
 
         function updateSlugFromName(name) {
             const slugInput = document.getElementById('slug');
-            // Only auto-update if the user hasn't manually edited the slug
-            if (!slugInput.dataset.manuallyEdited) {
-                slugInput.value = slugify(name);
-                updateLandingPageUrl();
-            }
+            slugInput.value = slugify(name);
+            updateLandingPageUrl();
         }
 
         function updateLandingPageUrl() {
             const slugInput = document.getElementById('slug');
             const slugPreview = document.getElementById('slugPreview');
-            
             if (slugPreview) {
-                const slug = slugInput.value || 'your-product-slug';
-                slugPreview.textContent = slug;
+                slugPreview.textContent = slugInput.value || 'your-product-slug';
             }
         }
 
@@ -599,30 +686,309 @@
             const fullUrl = baseUrl + '/' + slug;
             
             navigator.clipboard.writeText(fullUrl).then(() => {
-                // Show a brief notification
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center gap-2';
-                notification.innerHTML = `
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    URL copied to clipboard!
-                `;
-                document.body.appendChild(notification);
-                setTimeout(() => notification.remove(), 2000);
+                showToast('URL copied to clipboard!', 'success');
             });
         }
 
-        // Mark slug as manually edited when user types in it
-        document.addEventListener('DOMContentLoaded', function() {
-            const slugInput = document.getElementById('slug');
-            if (slugInput) {
-                slugInput.addEventListener('input', function() {
-                    this.dataset.manuallyEdited = 'true';
-                    updateLandingPageUrl();
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function showToast(message, type = 'info') {
+            const colors = {
+                info: 'bg-gradient-to-r from-purple-600 to-blue-600',
+                success: 'bg-emerald-600',
+                error: 'bg-red-600',
+            };
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 ${colors[type] || colors.info} text-white px-6 py-4 rounded-lg shadow-lg z-50 flex items-center gap-3 max-w-md`;
+            notification.innerHTML = `<div><p class="font-semibold">${escapeHtml(message)}</p></div>`;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 4000);
+        }
+
+        function renderImageCards() {
+            const preview = document.getElementById('imagePreview');
+            const preuploaded = document.getElementById('preuploadedImagesContainer');
+            preview.innerHTML = '';
+            preuploaded.innerHTML = '';
+
+            productImageItems.forEach((item, index) => {
+                const isMain = index === 0;
+                const card = document.createElement('div');
+                card.className = 'border border-white/10 rounded-lg p-4 bg-[#0a1628]';
+                card.dataset.imageId = item.id;
+                card.innerHTML = `
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="relative w-full md:w-40 flex-shrink-0">
+                            <img src="${item.previewUrl}" class="w-full h-32 object-cover rounded-lg border border-white/10" />
+                            <span class="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded ${isMain ? 'bg-emerald-600' : 'bg-black/60'} text-white">
+                                ${isMain ? 'Main image' : 'Description image ' + index}
+                            </span>
+                        </div>
+                        <div class="flex-1 space-y-3">
+                            ${isMain ? `
+                            <p class="text-sm text-emerald-300/90">Used as the main image at the top of the landing page. Not inserted into Description.</p>
+                            <p class="text-xs ${item.status === 'error' ? 'text-red-400' : 'text-gray-500'}">
+                                ${item.status === 'uploading' ? 'Uploading image...' :
+                                  item.status === 'error' ? (item.error || 'Something went wrong') :
+                                  'Ready — main landing image'}
+                            </p>
+                            ` : `
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Title</label>
+                                <input type="text"
+                                    class="image-title-input w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    data-image-id="${item.id}"
+                                    value="${escapeHtml(item.title || '')}"
+                                    placeholder="${item.status === 'generating' ? 'AI is generating title...' : 'Image title'}"
+                                    ${item.status === 'generating' ? 'disabled' : ''} />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Small description</label>
+                                <textarea
+                                    class="image-desc-input w-full px-3 py-2 bg-[#0f1c2e] border border-white/10 rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    data-image-id="${item.id}"
+                                    rows="2"
+                                    placeholder="${item.status === 'generating' ? 'AI is generating description...' : 'Short description'}"
+                                    ${item.status === 'generating' ? 'disabled' : ''}>${escapeHtml(item.description || '')}</textarea>
+                            </div>
+                            <p class="text-xs ${item.status === 'error' ? 'text-red-400' : 'text-gray-500'}">
+                                ${item.status === 'uploading' ? 'Uploading image...' :
+                                  item.status === 'generating' ? 'Generating title & description with AI...' :
+                                  item.status === 'error' ? (item.error || 'Something went wrong') :
+                                  'Ready — synced to Description'}
+                            </p>
+                            `}
+                        </div>
+                    </div>
+                `;
+                preview.appendChild(card);
+
+                if (item.path) {
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'preuploaded_images[]';
+                    hidden.value = item.path;
+                    preuploaded.appendChild(hidden);
+                }
+            });
+
+            preview.querySelectorAll('.image-title-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    const item = productImageItems.find(i => i.id === this.dataset.imageId);
+                    if (item) {
+                        item.title = this.value;
+                        syncImagesToDescription();
+                    }
                 });
+            });
+            preview.querySelectorAll('.image-desc-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    const item = productImageItems.find(i => i.id === this.dataset.imageId);
+                    if (item) {
+                        item.description = this.value;
+                        syncImagesToDescription();
+                    }
+                });
+            });
+
+            updateCreateButtonState();
+        }
+
+        /** Images after the first (main) one — these fill the Description field. */
+        function descriptionImageItems() {
+            return productImageItems
+                .map((item, index) => ({ item, index }))
+                .filter(({ item, index }) => item.uploadedUrl && index > 0)
+                .map(({ item }) => item);
+        }
+
+        function buildDescriptionHtmlFromImages() {
+            return descriptionImageItems()
+                .map((item) => {
+                    const title = (item.title || '').trim();
+                    const desc = (item.description || '').trim();
+                    let html = '';
+                    if (title) {
+                        html += `<h2 class="ql-align-center"><strong>${escapeHtml(title)}</strong></h2>`;
+                    }
+                    if (desc) {
+                        html += `<p class="ql-align-center">${escapeHtml(desc)}</p>`;
+                    }
+                    html += `<p class="ql-align-center"><img src="${escapeHtml(item.uploadedUrl)}"></p>`;
+                    return html;
+                })
+                .join('');
+        }
+
+        function syncImagesToDescription() {
+            const html = buildDescriptionHtmlFromImages();
+            const textarea = document.getElementById('description');
+            const items = descriptionImageItems();
+
+            if (descriptionQuill) {
+                isSyncingDescriptionFromImages = true;
+                descriptionQuill.setText('');
+                let index = 0;
+
+                items.forEach((item, i) => {
+                        const title = (item.title || '').trim();
+                        const desc = (item.description || '').trim();
+
+                        if (i > 0) {
+                            descriptionQuill.insertText(index, '\n');
+                            index += 1;
+                        }
+
+                        if (title) {
+                            descriptionQuill.insertText(index, title + '\n', { bold: true });
+                            descriptionQuill.formatLine(index, 1, { header: 2, align: 'center' });
+                            index = descriptionQuill.getLength() - 1;
+                        }
+
+                        if (desc) {
+                            descriptionQuill.insertText(index, desc + '\n');
+                            descriptionQuill.formatLine(index, 1, { align: 'center' });
+                            index = descriptionQuill.getLength() - 1;
+                        }
+
+                        descriptionQuill.insertEmbed(index, 'image', item.uploadedUrl);
+                        descriptionQuill.formatLine(index, 1, { align: 'center' });
+                        index = descriptionQuill.getLength() - 1;
+                        descriptionQuill.insertText(index, '\n');
+                        index = descriptionQuill.getLength() - 1;
+                    });
+
+                if (textarea) {
+                    textarea.value = descriptionQuill.root.innerHTML || html;
+                }
+                isSyncingDescriptionFromImages = false;
+                return;
             }
-        });
+
+            // Quill not ready yet — still write HTML so create submit does not lose content
+            if (textarea) {
+                textarea.value = html;
+            }
+        }
+
+        async function uploadImageFile(file) {
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('_token', csrfToken);
+
+            const response = await fetch(uploadImageUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                body: formData
+            });
+            const data = await response.json();
+            if (!data.success || !data.url) {
+                throw new Error(data.message || 'Image upload failed');
+            }
+            return data;
+        }
+
+        async function generateAiCaptions(count) {
+            const name = document.getElementById('name')?.value?.trim() || '';
+            const categoryId = document.getElementById('category_id')?.value || '';
+            const categoryText = categoryId
+                ? (document.querySelector(`#category_id option[value="${categoryId}"]`)?.textContent || '')
+                : '';
+
+            const response = await fetch(generateCaptionsUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    product_name: name || 'Product',
+                    category: categoryText,
+                    count: count,
+                })
+            });
+            const data = await response.json();
+            if (!data.success || !Array.isArray(data.captions)) {
+                throw new Error(data.message || 'Failed to generate captions');
+            }
+            return data.captions;
+        }
+
+        async function processUploadedImages(files) {
+            productImageItems = Array.from(files).map((file, index) => ({
+                id: `img-${Date.now()}-${index}`,
+                file,
+                previewUrl: URL.createObjectURL(file),
+                uploadedUrl: null,
+                path: null,
+                title: '',
+                description: '',
+                status: 'uploading',
+                error: null,
+            }));
+            uploadedFiles = Array.from(files);
+            setDescriptionFillingUI(true, 'Uploading images… description will fill automatically');
+            document.getElementById('descriptionEditorWrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            renderImageCards();
+
+            try {
+                // Upload all images in parallel
+                await Promise.all(productImageItems.map(async (item, index) => {
+                    try {
+                        const uploaded = await uploadImageFile(item.file);
+                        item.uploadedUrl = uploaded.url;
+                        item.path = uploaded.path;
+                        // First image is main/hero only — no AI caption needed
+                        item.status = index === 0 ? 'ready' : 'generating';
+                    } catch (err) {
+                        item.status = 'error';
+                        item.error = err.message || 'Upload failed';
+                    }
+                }));
+                setDescriptionFillingUI(true, 'AI is writing titles & description…');
+                renderImageCards();
+
+                const readyItems = productImageItems.filter((i, index) => index > 0 && i.status === 'generating');
+                if (readyItems.length === 0) {
+                    setDescriptionFillingUI(true, 'Filling description…');
+                    syncImagesToDescription();
+                    return;
+                }
+
+                try {
+                    const captions = await generateAiCaptions(readyItems.length);
+                    readyItems.forEach((item, index) => {
+                        item.title = captions[index]?.title || `Feature ${index + 1}`;
+                        item.description = captions[index]?.description || '';
+                        item.status = 'ready';
+                    });
+                } catch (err) {
+                    readyItems.forEach((item, index) => {
+                        item.title = `Feature ${index + 1}`;
+                        item.description = '';
+                        item.status = 'ready';
+                    });
+                    showToast('AI captions unavailable — you can fill titles manually.', 'error');
+                }
+
+                setDescriptionFillingUI(true, 'Filling description…');
+                renderImageCards();
+                syncImagesToDescription();
+            } finally {
+                setDescriptionFillingUI(false);
+            }
+        }
+
+        function previewImages(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+            processUploadedImages(files);
+        }
 
         function togglePromotions(enabled) {
             const promotionsContent = document.getElementById('promotionsContent');
@@ -642,12 +1008,16 @@
                 const minQty = div.querySelector('input[name*="[min_quantity]"]');
                 const maxQty = div.querySelector('input[name*="[max_quantity]"]');
                 const price = div.querySelector('input[name*="[price]"]');
+                const compareAt = div.querySelector('input[name*="[compare_at_price]"]');
+                const label = div.querySelector('input[name*="[label]"]');
                 
                 if (minQty && price) {
                     promotions.push({
+                        label: label ? (label.value || null) : null,
                         min_quantity: minQty.value || '',
                         max_quantity: maxQty ? (maxQty.value || null) : null,
-                        price: price.value || ''
+                        price: price.value || '',
+                        compare_at_price: compareAt && compareAt.value ? compareAt.value : null
                     });
                 }
             });
@@ -692,7 +1062,7 @@
                     <p class="text-xs text-gray-400 mt-1">This will replace "Buy" or "اشتري" in your landing page</p>
                 </div>
                 
-                <div class="grid grid-cols-3 gap-3 mb-3">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-300 mb-1">Min Quantity *</label>
                         <input 
@@ -719,7 +1089,7 @@
                     </div>
                     
                     <div>
-                        <label class="block text-xs font-medium text-gray-300 mb-1">Price per Unit (DHS) *</label>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Price per Unit ({{ $currencyCode }}) *</label>
                         <input 
                             type="number" 
                             name="promotions[${promotionId}][price]" 
@@ -731,10 +1101,23 @@
                             oninput="updatePromotionsJson()"
                         />
                     </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Compare at Price ({{ $currencyCode }})</label>
+                        <input 
+                            type="number" 
+                            name="promotions[${promotionId}][compare_at_price]" 
+                            step="0.01"
+                            min="0"
+                            placeholder="Optional strikethrough"
+                            class="w-full px-3 py-2 text-sm bg-[#0f1c2e] border border-white/10 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            oninput="updatePromotionsJson()"
+                        />
+                    </div>
                 </div>
                 
                 <div class="bg-yellow-500/10 border border-yellow-500/20 rounded p-2 text-xs text-yellow-300">
-                    <strong>Example:</strong> Min: 2, Max: 4, Price: 90.00 → Customers buying 2-4 items pay 90 DHS per item
+                    <strong>Example:</strong> Min: 2, Max: 4, Price: 90.00, Compare: 120.00 → Shows 90 with 120 struck through
                 </div>
             `;
             
@@ -840,7 +1223,7 @@
                     
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-medium text-gray-300 mb-1">Price (DHS) *</label>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Price ({{ $currencyCode }}) *</label>
                             <input 
                                 type="number" 
                                 name="variations[${variationId}][price]" 
@@ -967,79 +1350,6 @@
             }
         }
 
-        function previewImages(event) {
-            const preview = document.getElementById('imagePreview');
-            const container = document.getElementById('landingSectionsContainer');
-            preview.innerHTML = '';
-            container.innerHTML = '';
-            
-            const files = event.target.files;
-            uploadedFiles = Array.from(files);
-            
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    const div = document.createElement('div');
-                    div.className = 'relative group';
-                    div.innerHTML = `
-                        <img src="${e.target.result}" class="w-full h-32 object-cover rounded-lg border border-white/10" />
-                        <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition rounded-lg flex items-center justify-center">
-                            <span class="text-white text-xs">Image ${i + 1}${i === 0 ? ' (Hero)' : ''}</span>
-                        </div>
-                    `;
-                    preview.appendChild(div);
-                    
-                    // Auto-create landing section for each image (except first one which is hero)
-                    if (i > 0) {
-                        createAutoLandingSection(i, e.target.result);
-                    }
-                }
-                
-                reader.readAsDataURL(file);
-            }
-            
-            sectionCounter = files.length - 1; // Exclude hero image from counter
-        }
-
-        function createAutoLandingSection(imageIndex, imageDataUrl) {
-            const container = document.getElementById('landingSectionsContainer');
-            const noSectionsMsg = document.getElementById('noSectionsMessage');
-            if (noSectionsMsg) {
-                noSectionsMsg.style.display = 'none';
-            }
-            
-            const sectionId = imageIndex - 1; // 0-based for sections (since we skip hero)
-            
-            const sectionDiv = document.createElement('div');
-            sectionDiv.className = 'border border-cyan-500/30 rounded-lg p-4 bg-[#0a1628]';
-            sectionDiv.id = `section-${sectionId}`;
-            sectionDiv.innerHTML = `
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-sm font-semibold text-cyan-400">Section ${sectionId + 1} - Image ${imageIndex + 1}</h4>
-                    <span class="text-xs text-gray-500 px-2 py-1 bg-purple-900/30 rounded">AI will generate descriptions</span>
-                </div>
-                <div class="space-y-3">
-                    <div>
-                        <div class="mb-2">
-                            <img src="${imageDataUrl}" class="w-full h-32 object-cover rounded-lg border border-white/10" />
-                        </div>
-                        <input type="hidden" name="landing_sections[${sectionId}][auto_generated]" value="1">
-                        <input type="hidden" name="landing_sections[${sectionId}][image_index]" value="${imageIndex}">
-                    </div>
-                    <div class="bg-purple-500/10 border border-purple-500/30 rounded p-3 text-center">
-                        <svg class="w-8 h-8 text-purple-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
-                        <p class="text-xs text-purple-300">AI will generate titles and descriptions in French, English, and Arabic for this image when you enable AI Landing Page Generation</p>
-                    </div>
-                </div>
-            `;
-            
-            container.appendChild(sectionDiv);
-        }
-
         document.addEventListener('DOMContentLoaded', function() {
             const generateToggle = document.getElementById('generate_landing_page');
             const aiNotice = document.getElementById('aiNotice');
@@ -1052,71 +1362,113 @@
                 }
             });
 
-            // Add form validation for promotions
+            // AJAX create — no full page reload; landing page job runs in background
             const form = document.querySelector('form');
-            form.addEventListener('submit', function(e) {
+            const submitBtn = document.getElementById('createProductBtn') || form.querySelector('button[type="submit"]');
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const busyImages = productImageItems.filter(i => i.status === 'uploading' || i.status === 'generating');
+                if (busyImages.length > 0 || isFillingDescription) {
+                    showToast('Please wait until the description finishes filling.', 'error');
+                    return;
+                }
+
+                // Always sync image titles/descriptions into the description field before save
+                syncImagesToDescription();
+
                 const hasPromotionsCheckbox = document.getElementById('has_promotions');
                 const promotionsContainer = document.getElementById('promotionsContainer');
                 
-                // Collect promotions data and store in hidden JSON field as backup
                 const promotions = [];
                 const promotionDivs = promotionsContainer.querySelectorAll('[id^="promotion-"]');
                 
-                console.log('Found promotion divs:', promotionDivs.length);
-                
-                promotionDivs.forEach((div, index) => {
+                promotionDivs.forEach((div) => {
                     const minQty = div.querySelector('input[name*="[min_quantity]"]');
                     const maxQty = div.querySelector('input[name*="[max_quantity]"]');
                     const price = div.querySelector('input[name*="[price]"]');
+                    const compareAt = div.querySelector('input[name*="[compare_at_price]"]');
+                    const label = div.querySelector('input[name*="[label]"]');
                     
                     if (minQty && price && minQty.value && price.value) {
                         promotions.push({
+                            label: label ? (label.value || null) : null,
                             min_quantity: minQty.value,
                             max_quantity: maxQty ? maxQty.value : null,
-                            price: price.value
+                            price: price.value,
+                            compare_at_price: compareAt && compareAt.value ? compareAt.value : null
                         });
                     }
                 });
                 
-                console.log('Collected promotions:', promotions);
                 document.getElementById('promotions_json').value = JSON.stringify(promotions);
                 
                 if (hasPromotionsCheckbox.checked && promotions.length === 0) {
-                    e.preventDefault();
-                    
-                    // Show error notification
-                    const notification = document.createElement('div');
-                    notification.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-4 rounded-lg shadow-lg z-50 flex items-center gap-3';
-                    notification.innerHTML = `
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                        </svg>
-                        <div>
-                            <p class="font-semibold">Promotions enabled but no tiers added!</p>
-                            <p class="text-sm">Please click "Add Tier" to add at least one pricing tier, or uncheck "Enable Quantity-Based Pricing".</p>
-                        </div>
-                    `;
-                    document.body.appendChild(notification);
-                    
-                    // Scroll to promotions section
+                    showToast('Promotions enabled but no tiers added! Add at least one pricing tier.', 'error');
                     document.getElementById('promotionsCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    
-                    // Remove notification after 5 seconds
+                    return;
+                }
+
+                if (descriptionQuill) {
+                    document.getElementById('description').value = descriptionQuill.root.innerHTML;
+                } else if (productImageItems.some(i => i.uploadedUrl)) {
+                    document.getElementById('description').value = buildDescriptionHtmlFromImages();
+                }
+
+                // Prefer pre-uploaded paths; clear file input to avoid double upload
+                const fileInput = document.getElementById('images');
+                if (productImageItems.some(i => i.path) && fileInput) {
+                    fileInput.value = '';
+                }
+
+                const originalBtnHtml = submitBtn.innerHTML;
+                isSubmittingProduct = true;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `
+                    <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    <span id="createProductBtnLabel">Creating...</span>
+                `;
+
+                try {
+                    const formData = new FormData(form);
+                    const response = await fetch(storeProductUrl, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: formData
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || data.success === false) {
+                        const firstError = data.errors
+                            ? Object.values(data.errors).flat()[0]
+                            : (data.message || 'Failed to create product');
+                        throw new Error(firstError);
+                    }
+
+                    showToast(data.message || 'Product created successfully!', 'success');
+                    // Soft navigate after short delay so toast is visible
                     setTimeout(() => {
-                        notification.remove();
-                    }, 5000);
-                    
-                    return false;
+                        window.location.href = data.redirect || productsIndexUrl;
+                    }, 800);
+                } catch (err) {
+                    showToast(err.message || 'Failed to create product', 'error');
+                    isSubmittingProduct = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                    updateCreateButtonState();
                 }
             });
 
             const aiGenerateBtn = document.getElementById('aiGenerateBtn');
-            const aiGenerateBtnText = document.getElementById('aiGenerateBtnText');
             
-            aiGenerateBtn.addEventListener('click', function() {
+            aiGenerateBtn.addEventListener('click', async function() {
                 const nameField = document.getElementById('name');
-                const descriptionField = document.getElementById('description');
-                const categoryField = document.getElementById('category_id');
                 const priceField = document.getElementById('price');
                 
                 if (!nameField.value || !priceField.value) {
@@ -1127,23 +1479,31 @@
                 const generateToggle = document.getElementById('generate_landing_page');
                 generateToggle.checked = true;
                 aiNotice.classList.remove('hidden');
+
+                // Re-generate image captions for description images only (skip main/first)
+                const readyItems = productImageItems
+                    .map((item, index) => ({ item, index }))
+                    .filter(({ item, index }) => item.uploadedUrl && index > 0)
+                    .map(({ item }) => item);
+                if (readyItems.length > 0) {
+                    readyItems.forEach(i => { i.status = 'generating'; });
+                    renderImageCards();
+                    try {
+                        const captions = await generateAiCaptions(readyItems.length);
+                        readyItems.forEach((item, index) => {
+                            item.title = captions[index]?.title || item.title || `Feature ${index + 1}`;
+                            item.description = captions[index]?.description || item.description || '';
+                            item.status = 'ready';
+                        });
+                        renderImageCards();
+                        syncImagesToDescription();
+                    } catch (err) {
+                        readyItems.forEach(i => { i.status = 'ready'; });
+                        renderImageCards();
+                    }
+                }
                 
-                const notification = document.createElement('div');
-                notification.className = 'fixed top-4 right-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-lg shadow-lg z-50 flex items-center gap-3';
-                notification.innerHTML = `
-                    <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                    <div>
-                        <p class="font-semibold">AI Landing Page Enabled</p>
-                        <p class="text-sm">Your landing page will be generated when you create the product</p>
-                    </div>
-                `;
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.remove();
-                }, 4000);
+                showToast('AI Landing Page enabled. It will generate in the background when you create the product.', 'info');
             });
         });
     </script>
@@ -1251,21 +1611,19 @@
                     }
                 });
 
-                // Set initial value
+                // Expose for image → description sync
+                descriptionQuill = quill;
+
+                // Set initial value, or re-sync if images were uploaded before Quill finished loading
                 if (descriptionTextarea.value) {
                     quill.root.innerHTML = descriptionTextarea.value;
+                } else if (productImageItems.some(i => i.uploadedUrl)) {
+                    syncImagesToDescription();
                 }
 
-                // Sync editor content to textarea on form submit
-                const form = descriptionTextarea.closest('form');
-                if (form) {
-                    form.addEventListener('submit', function() {
-                        descriptionTextarea.value = quill.root.innerHTML;
-                    });
-                }
-
-                // Also sync on change
+                // Sync editor content to textarea (skip when we are writing from images)
                 quill.on('text-change', function() {
+                    if (isSyncingDescriptionFromImages) return;
                     descriptionTextarea.value = quill.root.innerHTML;
                 });
             }
