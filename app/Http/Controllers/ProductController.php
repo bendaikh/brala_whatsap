@@ -232,18 +232,28 @@ class ProductController extends Controller
         $city = $locationData['city'];
         $address = $locationData['address'];
 
-        // Determine the price if not provided
-        $selectedPrice = $validated['selected_price'] ?? null;
-        if (!$selectedPrice) {
-            if (!empty($validated['selected_promotion_id'])) {
-                $promotion = \App\Models\ProductPromotion::find($validated['selected_promotion_id']);
-                $selectedPrice = $promotion ? $promotion->price : $product->price;
-            } elseif (!empty($validated['selected_variation_id'])) {
-                $variation = \App\Models\ProductVariation::find($validated['selected_variation_id']);
-                $selectedPrice = $variation ? $variation->price : $product->price;
-            } else {
-                $selectedPrice = $product->price;
-            }
+        // Only accept a promotion / variation that belongs to this product.
+        $promotion = !empty($validated['selected_promotion_id'])
+            ? \App\Models\ProductPromotion::where('product_id', $product->id)
+                ->where('is_active', true)
+                ->find($validated['selected_promotion_id'])
+            : null;
+        $variation = !empty($validated['selected_variation_id'])
+            ? \App\Models\ProductVariation::where('product_id', $product->id)
+                ->find($validated['selected_variation_id'])
+            : null;
+        $validated['selected_promotion_id'] = $promotion?->id;
+        $validated['selected_variation_id'] = $variation?->id;
+
+        // Unit price is resolved server-side from the chosen promotion / variation
+        // (or the product price) instead of trusting the submitted selected_price.
+        // Quantity is derived from the promotion: ProductLead::order_quantity.
+        if ($promotion) {
+            $selectedPrice = $promotion->price;
+        } elseif ($variation) {
+            $selectedPrice = $variation->price;
+        } else {
+            $selectedPrice = $product->price;
         }
 
         $phone = $validated['phone'] ?? null;
