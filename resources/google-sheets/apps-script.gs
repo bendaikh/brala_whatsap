@@ -1,5 +1,5 @@
 /**
- * Bralam -> Google Sheets order webhook (v2: header-aware).
+ * Bralam -> Google Sheets order webhook (v3: header-aware, plain-number prices).
  *
  * Rows are written by matching the HEADER NAMES in row 1 of the tab,
  * not by position. Any column order works, extra columns of your own
@@ -65,10 +65,20 @@ function doPost(e) {
     var target = Math.max(sheet.getLastRow(), BRALAM_HEADER_ROW) + 1;
     var range = sheet.getRange(target, 1, 1, row.length);
 
-    // Keep phone numbers / ids as text so leading 0 and + are not lost.
+    // Phone numbers / ids as text (keep leading 0 and +); price, total and qty
+    // as plain numbers so the sheet never shows a currency symbol like "$".
     headers.forEach(function (h, i) {
       var c = lookup[norm(h)];
-      if (c && c.text) sheet.getRange(target, i + 1).setNumberFormat('@');
+      if (!c) return;
+      if (c.text) {
+        sheet.getRange(target, i + 1).setNumberFormat('@');
+      } else if (c.number) {
+        var n = Number(c.value);
+        if (c.value !== '' && c.value !== null && !isNaN(n)) {
+          row[i] = n;
+          sheet.getRange(target, i + 1).setNumberFormat(Math.floor(n) === n ? '0' : '0.00');
+        }
+      }
     });
 
     range.setValues([row]);

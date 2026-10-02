@@ -1,6 +1,6 @@
 @php($appsScript = file_get_contents(resource_path('google-sheets/apps-script.gs')))
 <details class="mt-3" {{ ($open ?? false) ? 'open' : '' }}>
-    <summary class="cursor-pointer text-sm font-medium text-blue-900">Show Apps Script template (v2 — matches your sheet's column headers)</summary>
+    <summary class="cursor-pointer text-sm font-medium text-blue-900">Show Apps Script template (v3 — matches your sheet's column headers, plain-number prices)</summary>
     <p class="mt-2 text-xs text-blue-800">
         Values are written under the matching header in row 1 (e.g. <em>Nom</em>, <em>Téléphone</em>, <em>Ville</em>, <em>Adresse</em>, <em>Produit</em>, <em>Quantité</em>, <em>Prix</em>, <em>Total</em>…), whatever the column order.
         If you already deployed an older script, paste this one over it, then <strong>Deploy → Manage deployments → Edit → Version: New version → Deploy</strong> (the URL stays the same).

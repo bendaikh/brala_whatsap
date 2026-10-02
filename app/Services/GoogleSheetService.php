@@ -26,15 +26,16 @@ class GoogleSheetService
         'address' => ['header' => 'Address', 'aliases' => ['Adresse', 'Shipping address', 'Adresse de livraison', 'Delivery address', 'Lieu de livraison', 'Quartier', 'Location', 'العنوان']],
         'product_name' => ['header' => 'Product', 'aliases' => ['Product name', 'Produit', 'Nom produit', 'Nom du produit', 'Article', 'Item', 'Items', 'المنتج']],
         'product_sku' => ['header' => 'SKU', 'text' => true, 'aliases' => ['Product SKU', 'Product ref', 'Product reference', 'Reference produit', 'Ref produit', 'Code produit']],
-        'quantity' => ['header' => 'Qty', 'aliases' => ['Quantity', 'Quantite', 'Qte', 'Qté', 'Product qt', 'Product qty', 'Nombre', 'الكمية']],
-        'price' => ['header' => 'Price', 'aliases' => ['Unit price', 'Prix', 'Prix unitaire', 'السعر']],
-        'total' => ['header' => 'Total', 'aliases' => ['Amount', 'Total price', 'Prix total', 'Montant', 'Montant total', 'COD', 'COD amount', 'Cash on delivery', 'A encaisser', 'Total amount', 'المجموع']],
+        'quantity' => ['header' => 'Qty', 'number' => true, 'aliases' => ['Quantity', 'Quantite', 'Qte', 'Qté', 'Product qt', 'Product qty', 'Nombre', 'الكمية']],
+        'price' => ['header' => 'Price', 'number' => true, 'aliases' => ['Unit price', 'Prix', 'Prix unitaire', 'السعر']],
+        'total' => ['header' => 'Total', 'number' => true, 'aliases' => ['Amount', 'Total price', 'Prix total', 'Montant', 'Montant total', 'COD', 'COD amount', 'Cash on delivery', 'A encaisser', 'Total amount', 'المجموع']],
         'note' => ['header' => 'Note', 'aliases' => ['Notes', 'Comment', 'Comments', 'Commentaire', 'Remarque', 'Remarques', 'Observation', 'Instructions', 'ملاحظة']],
         'status' => ['header' => 'Status', 'aliases' => ['Statut', 'Etat', 'Order status', 'الحالة']],
         'language' => ['header' => 'Language', 'aliases' => ['Langue', 'Lang']],
         'variation' => ['header' => 'Variation', 'aliases' => ['Variant', 'Variante', 'Option', 'Options', 'Size', 'Taille', 'Color', 'Couleur']],
         'promotion' => ['header' => 'Offer', 'aliases' => ['Promotion', 'Promo', 'Offre', 'Pack', 'Bundle', 'العرض']],
         'country' => ['header' => 'Country', 'aliases' => ['Pays', 'البلد']],
+        'currency' => ['header' => 'Currency', 'aliases' => ['Devise', 'Monnaie', 'العملة']],
     ];
 
     /** Columns that are added to the default header row of an empty sheet. */
@@ -52,7 +53,7 @@ class GoogleSheetService
             ];
         }
 
-        $lead->loadMissing(['product', 'variation', 'promotion']);
+        $lead->loadMissing(['product.store.workspace', 'variation', 'promotion']);
 
         $product = $lead->product;
         $quantity = max(1, (int) ($lead->order_quantity ?: 1));
@@ -69,8 +70,11 @@ class GoogleSheetService
             'product_name' => $product?->name,
             'product_sku' => $lead->variation?->sku ?? $product?->sku,
             'quantity' => $quantity,
-            'price' => $price,
-            'total' => $price * $quantity,
+            // Prices are stored in the store currency's main unit (e.g. 14900.00 XOF):
+            // send plain numbers, never a formatted string or currency symbol.
+            'price' => $this->plainAmount($price),
+            'total' => $this->plainAmount($price * $quantity),
+            'currency' => $product?->store?->workspace?->getCurrencyCode(),
             'variation' => $lead->variation?->name ?? $lead->variation?->sku,
             'promotion' => $lead->promotion?->label,
             'language' => $lead->language,
@@ -127,6 +131,7 @@ class GoogleSheetService
                 'header' => $def['header'],
                 'aliases' => $def['aliases'] ?? [],
                 'text' => (bool) ($def['text'] ?? false),
+                'number' => (bool) ($def['number'] ?? false),
                 'default' => in_array($key, self::DEFAULT_HEADER_KEYS, true),
                 'value' => $this->cellValue($values[$key] ?? null),
             ];
@@ -141,6 +146,7 @@ class GoogleSheetService
                 'header' => $name,
                 'aliases' => [str_replace('_', ' ', $name)],
                 'text' => true,
+                'number' => false,
                 'default' => false,
                 'value' => $this->cellValue($value),
             ];
@@ -154,6 +160,14 @@ class GoogleSheetService
                 'columns' => $columns,
             ]
         );
+    }
+
+    /** 14900.0 -> 14900, 149.5 -> 149.5 (max 2 decimals). */
+    protected function plainAmount(float $amount): int|float
+    {
+        $amount = round($amount, 2);
+
+        return floor($amount) == $amount ? (int) $amount : $amount;
     }
 
     protected function cellValue(mixed $value): string|int|float
