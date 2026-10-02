@@ -9,7 +9,11 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-6">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-5">
+                <h3 class="text-sm font-semibold text-blue-900">Apps Script</h3>
+                @include('stores.partials.google-sheets-apps-script')
+            </div>
             <div class="bg-white overflow-hidden shadow-sm rounded-lg">
                 <div class="p-6">
                     <form method="POST" action="{{ route('stores.google-sheets.update', $connection) }}" class="space-y-4">

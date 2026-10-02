@@ -32,48 +32,7 @@
                     <li>Set <strong>Execute as: Me</strong> and <strong>Who has access: Anyone</strong></li>
                     <li>Copy the Web App URL and paste it below as the Webhook URL</li>
                 </ol>
-                <details class="mt-3">
-                    <summary class="cursor-pointer text-sm font-medium text-blue-900">Show Apps Script template</summary>
-                    <pre class="mt-2 text-xs bg-white border border-blue-100 rounded-lg p-3 overflow-x-auto text-gray-800">function doPost(e) {
-  try {
-    var data = JSON.parse(e.postData.contents);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheetName = data.sheet_tab || 'Sheet1';
-    var sheet = ss.getSheetByName(sheetName) || ss.getSheets()[0];
-
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        'Date', 'Lead ID', 'Name', 'Phone', 'City', 'Address',
-        'Product', 'SKU', 'Qty', 'Price', 'Note', 'Status', 'Language'
-      ]);
-    }
-
-    sheet.appendRow([
-      data.created_at || '',
-      data.lead_id || '',
-      data.customer_name || '',
-      data.customer_phone || '',
-      data.city || '',
-      data.address || '',
-      data.product_name || '',
-      data.product_sku || '',
-      data.quantity || 1,
-      data.price || 0,
-      data.note || '',
-      data.status || '',
-      data.language || ''
-    ]);
-
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: true }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: false, error: String(err) }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}</pre>
-                </details>
+                @include('stores.partials.google-sheets-apps-script')
             </div>
 
             <!-- Add connection -->
