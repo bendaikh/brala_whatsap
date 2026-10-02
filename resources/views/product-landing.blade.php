@@ -200,6 +200,13 @@
                 margin-bottom: 1.25rem;
             }
         }
+        .landing-desc-section {
+            position: relative;
+            overflow-x: hidden;
+            padding: 0.5rem 0 2.5rem;
+            background: linear-gradient(180deg, var(--lp-bg) 0%, var(--lp-bg-light) 100%);
+        }
+        .lp-intro p { margin: 0 !important; }
         .hero-fade-in {
             animation: heroFadeUp 0.7s ease-out both;
         }
@@ -335,11 +342,13 @@
             $heroParts = preg_split('/\s*[–—\-]\s*/u', $heroName, 2);
             $heroMain = trim($heroParts[0] ?? $heroName);
             $heroAccent = trim($heroParts[1] ?? '');
-            $heroDescription = $product->landing_page_hero_description
-                ?? ($product->{'landing_page_' . $lpLang}['hero_description'] ?? null)
-                ?? ($product->landing_page_ar['hero_description'] ?? null)
-                ?? ($product->landing_page_fr['hero_description'] ?? null)
-                ?? ($product->landing_page_en['hero_description'] ?? null);
+            $heroDescription = collect([
+                $product->landing_page_hero_description,
+                $product->{'landing_page_' . $lpLang}['hero_description'] ?? null,
+                $product->landing_page_ar['hero_description'] ?? null,
+                $product->landing_page_fr['hero_description'] ?? null,
+                $product->landing_page_en['hero_description'] ?? null,
+            ])->first(fn ($d) => is_string($d) && trim($d) !== '');
         @endphp
 
         <!-- Title -->
@@ -367,75 +376,76 @@
         </div>
         @endif
 
+        @php
+            // Long description blocks (rendered AFTER the order form).
+            $productDesc = $product->stripDuplicateMainImagesFromHtml($product->description ?? '');
+            $landingDescs = [
+                'fr' => $product->stripDuplicateMainImagesFromHtml($product->landing_page_fr['description'] ?? ''),
+                'en' => $product->stripDuplicateMainImagesFromHtml($product->landing_page_en['description'] ?? ''),
+                'ar' => $product->stripDuplicateMainImagesFromHtml($product->landing_page_ar['description'] ?? ''),
+            ];
+
+            // Short intro shown between the main image and the form:
+            // 1) the AI/merchant short description (hero_description), otherwise
+            // 2) the first text paragraph at the very top of the long description
+            //    (it is then removed from the long description to avoid duplicates).
+            $introHtml = '';
+            if (!filled($heroDescription)) {
+                if (\App\Support\LandingDescription::hasContent($productDesc)) {
+                    [$introHtml, $productDesc] = \App\Support\LandingDescription::splitIntro($productDesc);
+                } elseif (\App\Support\LandingDescription::hasContent($landingDescs[$lpLang] ?? '')) {
+                    [$introHtml, $landingDescs[$lpLang]] = \App\Support\LandingDescription::splitIntro($landingDescs[$lpLang]);
+                }
+            }
+
+            $hasProductDesc = \App\Support\LandingDescription::hasContent($productDesc);
+            $showLandingDesc = array_map(fn ($html) => \App\Support\LandingDescription::hasContent($html), $landingDescs);
+            $hasAnyDescription = $hasProductDesc || in_array(true, $showLandingDesc, true);
+        @endphp
+
+        <!-- Short description (directly above the order form) -->
+        @if(filled($heroDescription) || $introHtml !== '')
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            @if($heroDescription)
-            <div class="text-center hero-fade-in mb-6">
+            <div class="text-center hero-fade-in">
+                @if(filled($heroDescription))
                 <p class="hero-description">
                     {{ $heroDescription }}
                 </p>
+                @else
+                <div class="hero-description description-content-right product-desc-centered lp-intro">
+                    {!! $introHtml !!}
+                </div>
+                @endif
             </div>
-            @endif
+        </div>
+        @endif
+    </section>
 
-            <div class="hero-grid hero-grid--cta-only">
-                <!-- Right Side: Order CTA & description -->
-                <div class="space-y-6">
+    {{-- Order form: right after the short description (or the main image) --}}
+    @include('partials.landing-order-form')
 
-                    <!-- Product Description Content (Same Column) -->
-                    @php
-                        $hasRealContentRight = function($html) {
-                            if (empty($html)) return false;
-                            $text = trim(strip_tags($html));
-                            $hasImage = stripos($html, '<img') !== false;
-                            $hasVideo = stripos($html, '<video') !== false || stripos($html, '<iframe') !== false;
-                            return !empty($text) || $hasImage || $hasVideo;
-                        };
+    <!-- Long description (product description / AI sections), after the form -->
+    @if($hasAnyDescription)
+    <section class="landing-desc-section">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="max-w-3xl mx-auto text-gray-900 leading-relaxed description-content-right product-desc-centered" x-cloak>
+                @if($hasProductDesc)
+                <div class="mb-6">
+                    {!! $productDesc !!}
+                </div>
+                @endif
 
-                        // Hide description images that duplicate the hero/main image
-                        $productDesc = $product->stripDuplicateMainImagesFromHtml($product->description ?? '');
-                        $hasProductDesc = $hasRealContentRight($productDesc);
-
-                        $descFrRight = $product->stripDuplicateMainImagesFromHtml($product->landing_page_fr['description'] ?? '');
-                        $descEnRight = $product->stripDuplicateMainImagesFromHtml($product->landing_page_en['description'] ?? '');
-                        $descArRight = $product->stripDuplicateMainImagesFromHtml($product->landing_page_ar['description'] ?? '');
-
-                        $showFrRight = $hasRealContentRight($descFrRight);
-                        $showEnRight = $hasRealContentRight($descEnRight);
-                        $showArRight = $hasRealContentRight($descArRight);
-
-                        $hasLandingDesc = $showFrRight || $showEnRight || $showArRight;
-                        $hasAnyDescription = $hasProductDesc || $hasLandingDesc;
-                    @endphp
-                    @if($hasAnyDescription)
-                    <div class="mt-6 max-w-none text-gray-900 leading-relaxed description-content-right product-desc-centered" x-cloak>
-                        {{-- Show product description (from Edit Product page) --}}
-                        @if($hasProductDesc)
-                        <div class="mb-6">
-                            {!! $productDesc !!}
-                        </div>
-                        @endif
-                        
-                        {{-- Show landing page builder descriptions if available --}}
-                        @if($showFrRight)
-                        <div x-show="currentLang === 'fr'" class="{{ $hasProductDesc ? 'mt-6 pt-6' : '' }}">
-                            {!! $descFrRight !!}
-                        </div>
-                        @endif
-                        @if($showEnRight)
-                        <div x-show="currentLang === 'en'" class="{{ $hasProductDesc ? 'mt-6 pt-6' : '' }}">
-                            {!! $descEnRight !!}
-                        </div>
-                        @endif
-                        @if($showArRight)
-                        <div x-show="currentLang === 'ar'" dir="rtl" class="{{ $hasProductDesc ? 'mt-6 pt-6' : '' }}">
-                            {!! $descArRight !!}
-                        </div>
-                        @endif
+                @foreach(['fr', 'en', 'ar'] as $descLang)
+                    @if($showLandingDesc[$descLang])
+                    <div x-show="currentLang === '{{ $descLang }}'" @if($descLang === 'ar') dir="rtl" @endif class="{{ $hasProductDesc ? 'mt-6 pt-6' : '' }}">
+                        {!! $landingDescs[$descLang] !!}
                     </div>
                     @endif
-                </div>
+                @endforeach
             </div>
         </div>
     </section>
+    @endif
 
     <style>
         .description-content img,
@@ -571,8 +581,6 @@
             margin: 1.5rem 0;
         }
     </style>
-
-    @include('partials.landing-order-form')
 
     <!-- Features Section -->
     <section class="py-16 lg:py-20" x-cloak>
